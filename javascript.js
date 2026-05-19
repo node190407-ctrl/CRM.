@@ -1,0 +1,1111 @@
+/* ═══════════════════════════════════════════════════════════════
+   NODE CRM P6 — javascript.js
+   Mini-CRM para emprendedores y micronegocios mexicanos
+   Stack: Vanilla JS ES6+ · Chart.js · SortableJS
+   ═══════════════════════════════════════════════════════════════ */
+
+'use strict';
+
+/* ── 1. CONSTANTES ─────────────────────────────────────────── */
+
+const ETAPAS = [
+  { id:'nuevo',       label:'Nuevo Lead',        emoji:'🔵', color:'#818CF8', bg:'#EEF2FF', tc:'#4338CA' },
+  { id:'contactado',  label:'Contactado',         emoji:'📩', color:'#F59E0B', bg:'#FEF3C7', tc:'#B45309' },
+  { id:'demo',        label:'Demo / Reunión',     emoji:'🎥', color:'#0D9488', bg:'#F0FDFB', tc:'#0F766E' },
+  { id:'propuesta',   label:'Propuesta Enviada',  emoji:'📄', color:'#1D4ED8', bg:'#EFF6FF', tc:'#1D4ED8' },
+  { id:'negociacion', label:'Negociación',         emoji:'🤝', color:'#9333EA', bg:'#F5F3FF', tc:'#7C3AED' },
+  { id:'ganado',      label:'✅ Ganado',            emoji:'✅', color:'#10B981', bg:'#D1FAE5', tc:'#065F46' },
+  { id:'perdido',     label:'❌ Perdido',           emoji:'❌', color:'#EF4444', bg:'#FEE2E2', tc:'#B91C1C' },
+];
+
+const ACT_ICONS  = { whatsapp:'💬', llamada:'📞', email:'📧', reunion:'🤝', propuesta:'📄', nota:'📝' };
+const ACT_LABELS = { whatsapp:'WhatsApp', llamada:'Llamada', email:'Email', reunion:'Reunión', propuesta:'Propuesta', nota:'Nota' };
+const ACT_BG     = { whatsapp:'#D1FAE5', llamada:'#EFF6FF', email:'#EEF2FF', reunion:'#F5F3FF', propuesta:'#FEF3C7', nota:'#F8F9FB' };
+
+const STORAGE_KEY = 'node_crm_v2';
+
+const PAGE_META = {
+  dashboard:     { title:'Dashboard',    sub:'Resumen de tu pipeline y actividades' },
+  pipeline:      { title:'Pipeline',      sub:'Gestiona tus deals en el Kanban' },
+  contactos:     { title:'Contactos',     sub:'Tu cartera de prospectos y clientes' },
+  actividades:   { title:'Actividades',   sub:'Historial completo de interacciones' },
+  configuracion: { title:'Configuración', sub:'Ajustes de cuenta y exportación de datos' },
+};
+
+/* ── 2. ESTADO ─────────────────────────────────────────────── */
+
+const S = {
+  view:          'dashboard',
+  contactos:     [],
+  deals:         [],
+  actividades:   [],
+  config:        { empresa:'NODE Soluciones Tecnológicas', usuario:'CEO NODE', whatsapp:'', moneda:'MXN' },
+  searchQuery:   '',
+  filterFuente:  '',
+  filterActTipo: '',
+  charts:        {},
+  sortables:     [],
+};
+
+/* ── 3. PERSISTENCIA ───────────────────────────────────────── */
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      contactos:   S.contactos,
+      deals:       S.deals,
+      actividades: S.actividades,
+      config:      S.config,
+    }));
+  } catch(e) { console.warn('Storage write error:', e); }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+    S.contactos   = d.contactos   || [];
+    S.deals       = d.deals       || [];
+    S.actividades = d.actividades || [];
+    S.config      = Object.assign({}, S.config, d.config || {});
+    return true;
+  } catch(e) { return false; }
+}
+
+/* ── 4. DATOS DE MUESTRA ───────────────────────────────────── */
+
+function seedData() {
+  const now = Date.now();
+  const ago = (days) => now - days * 86_400_000;
+
+  S.contactos = [
+    { id:'c1', nombre:'Ana García',        empresa:'Fotografía AG',          whatsapp:'5512345671', email:'ana@fotografiaag.mx',    fuente:'Instagram', monto:8000,  notas:'Fotógrafa de bodas, quiere presencia profesional en web.', creadoEn:ago(15), actualizadoEn:ago(2)  },
+    { id:'c2', nombre:'Roberto Hernández', empresa:'Taller Hernández',       whatsapp:'5523456782', email:'roberto@tallerhz.mx',     fuente:'Referido',  monto:5500,  notas:'Taller mecánico, necesita cotizador para sus servicios.',   creadoEn:ago(20), actualizadoEn:ago(5)  },
+    { id:'c3', nombre:'Sofía López',       empresa:'Consultoría Fiscal SL',  whatsapp:'5534567893', email:'sofia@cfiscal.mx',         fuente:'LinkedIn',  monto:17200, notas:'Contadora independiente, clientes piden CFDI 4.0.',        creadoEn:ago(10), actualizadoEn:ago(1)  },
+    { id:'c4', nombre:'Carlos Martínez',   empresa:'Pastelería Martínez',    whatsapp:'5545678904', email:'carlos@pasteleriam.mx',    fuente:'Facebook',  monto:4500,  notas:'Vende artesanalmente por Instagram y pedidos por WA.',      creadoEn:ago(8),  actualizadoEn:ago(3)  },
+    { id:'c5', nombre:'Diana Ruiz',        empresa:'DR Diseño Gráfico',      whatsapp:'5556789015', email:'diana@drdisenio.mx',       fuente:'Instagram', monto:12500, notas:'Diseñadora freelance, cotiza todo por WhatsApp.',           creadoEn:ago(30), actualizadoEn:ago(7)  },
+    { id:'c6', nombre:'Pedro Sánchez',     empresa:'Estudio Pilates PS',     whatsapp:'5567890126', email:'pedro@estudiops.mx',       fuente:'LinkedIn',  monto:6500,  notas:'Instructor, emite facturas RESICO de forma manual.',        creadoEn:ago(40), actualizadoEn:ago(0)  },
+    { id:'c7', nombre:'Marina Torres',     empresa:'Clínica Dental Torres',  whatsapp:'5578901237', email:'marina@clinicatorres.mx',  fuente:'Google',    monto:8000,  notas:'Odontóloga, pacientes corporativos exigen factura.',         creadoEn:ago(25), actualizadoEn:ago(10) },
+    { id:'c8', nombre:'Luis Vega',         empresa:'Vega Construcción',      whatsapp:'5589012348', email:'luis@vegaconstruccion.mx', fuente:'Referido',  monto:8500,  notas:'Constructor, cotizaciones en PDF manual sin proceso.',       creadoEn:ago(12), actualizadoEn:ago(4)  },
+  ];
+
+  S.deals = [
+    { id:'d1', titulo:'Landing Page Pro',         contactoId:'c1', valor:8000,  etapa:'propuesta',   fechaLimite:'2026-06-20', proximaAccion:'Enviar contrato firmado',      notas:'',                           creadoEn:ago(14), actualizadoEn:ago(2)  },
+    { id:'d2', titulo:'Cotizador Digital Pro',    contactoId:'c2', valor:5500,  etapa:'demo',        fechaLimite:'2026-06-10', proximaAccion:'Demo miércoles 10am',           notas:'',                           creadoEn:ago(18), actualizadoEn:ago(5)  },
+    { id:'d3', titulo:'Bundle Vende Más (B2)',    contactoId:'c3', valor:17200, etapa:'negociacion', fechaLimite:'2026-06-08', proximaAccion:'Revisar términos de pago',      notas:'Quiere pago en 2 parcialidades.', creadoEn:ago(9),  actualizadoEn:ago(1)  },
+    { id:'d4', titulo:'Landing Page Básica',      contactoId:'c4', valor:4500,  etapa:'nuevo',       fechaLimite:'2026-07-01', proximaAccion:'Enviar brief al cliente',       notas:'',                           creadoEn:ago(7),  actualizadoEn:ago(3)  },
+    { id:'d5', titulo:'NODE CRM P6',              contactoId:'c5', valor:12500, etapa:'contactado',  fechaLimite:'2026-06-25', proximaAccion:'Agendar demo del CRM',          notas:'',                           creadoEn:ago(28), actualizadoEn:ago(6)  },
+    { id:'d6', titulo:'Facturador CFDI Básico',   contactoId:'c6', valor:6500,  etapa:'ganado',      fechaLimite:'2026-05-30', proximaAccion:'Entregar en 7 días hábiles',   notas:'Anticipo 50% recibido.',    creadoEn:ago(38), actualizadoEn:ago(0)  },
+    { id:'d7', titulo:'Landing Page Pro',         contactoId:'c7', valor:8000,  etapa:'perdido',     fechaLimite:'2026-05-15', proximaAccion:'—',                            notas:'Eligió agencia local más barata.', creadoEn:ago(23), actualizadoEn:ago(10) },
+    { id:'d8', titulo:'Bundle STARTER (B1)',      contactoId:'c8', valor:8500,  etapa:'propuesta',   fechaLimite:'2026-06-18', proximaAccion:'Follow-up mañana temprano',    notas:'',                           creadoEn:ago(11), actualizadoEn:ago(4)  },
+    { id:'d9', titulo:'Cotizador + Landing Pro',  contactoId:'c1', valor:14000, etapa:'nuevo',       fechaLimite:'2026-07-10', proximaAccion:'Enviar propuesta ampliada',    notas:'Segunda oportunidad con Ana.', creadoEn:ago(3), actualizadoEn:ago(1)  },
+  ];
+
+  S.actividades = [
+    { id:'a1',  tipo:'whatsapp',  contactoId:'c3', descripcion:'Revisó la propuesta B2. Pide pago en 2 parcialidades, avaluamos acepta.',   creadoEn:ago(1)  },
+    { id:'a2',  tipo:'llamada',   contactoId:'c2', descripcion:'Confirmó demo del cotizador para el miércoles 10am. Muy entusiasmado.',      creadoEn:ago(2)  },
+    { id:'a3',  tipo:'email',     contactoId:'c3', descripcion:'Envié contrato preliminar para revisión. Pendiente firma del cliente.',      creadoEn:ago(3)  },
+    { id:'a4',  tipo:'reunion',   contactoId:'c4', descripcion:'Visita a su local. Le gustó la propuesta de landing básica.',                creadoEn:ago(4)  },
+    { id:'a5',  tipo:'whatsapp',  contactoId:'c1', descripcion:'Ana aprobó el diseño. Solicita ajuste en el texto del hero section.',        creadoEn:ago(5)  },
+    { id:'a6',  tipo:'nota',      contactoId:'c8', descripcion:'Luis llegó por referencia de Pedro. Excelente prospecto para Bundle B1.',    creadoEn:ago(6)  },
+    { id:'a7',  tipo:'propuesta', contactoId:'c8', descripcion:'Envié propuesta formal del Bundle STARTER (P1+P3) por $8,500 MXN.',          creadoEn:ago(7)  },
+    { id:'a8',  tipo:'email',     contactoId:'c6', descripcion:'Pedro realizó pago del 50% anticipo — $3,250 MXN. Iniciamos esta semana.',   creadoEn:ago(0)  },
+    { id:'a9',  tipo:'whatsapp',  contactoId:'c5', descripcion:'Diana preguntó funciones del CRM. Le expliqué pipeline y cotizador.',        creadoEn:ago(8)  },
+    { id:'a10', tipo:'llamada',   contactoId:'c7', descripcion:'Marina confirmó que no continúa. Eligió agencia local. Post-mortem hecho.',  creadoEn:ago(10) },
+  ];
+}
+
+/* ── 5. HELPERS ────────────────────────────────────────────── */
+
+const uid = () => '_' + Math.random().toString(36).slice(2, 10);
+
+function initials(name = '') {
+  return name.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+}
+
+function fmtMXN(n) {
+  return new Intl.NumberFormat('es-MX', { style:'currency', currency:'MXN', maximumFractionDigits:0 }).format(n || 0);
+}
+
+function fmtDate(val) {
+  if (!val) return '—';
+  const d = val instanceof Date ? val : new Date(typeof val === 'number' ? val : val + 'T00:00:00');
+  return d.toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+function timeAgo(ts) {
+  const diff = Date.now() - ts;
+  const m = Math.floor(diff / 60000);
+  if (m < 2)  return 'Justo ahora';
+  if (m < 60) return `Hace ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `Hace ${h}h`;
+  const d = Math.floor(h / 24);
+  if (d < 7)  return `Hace ${d}d`;
+  return fmtDate(ts);
+}
+
+function isOverdue(dateStr) {
+  if (!dateStr) return false;
+  return new Date(dateStr + 'T00:00:00') < new Date();
+}
+
+function escapeHTML(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
+const getEtapa      = (id) => ETAPAS.find(e => e.id === id) || ETAPAS[0];
+const getContacto   = (id) => S.contactos.find(c => c.id === id);
+const dealsByEtapa  = (id) => S.deals.filter(d => d.etapa === id);
+const actsByContact = (id) => S.actividades.filter(a => a.contactoId === id).sort((a,b) => b.creadoEn - a.creadoEn);
+const dealsByContact= (id) => S.deals.filter(d => d.contactoId === id);
+
+/* ── 6. ROUTER ─────────────────────────────────────────────── */
+
+function navigate(view) {
+  // Clean up previous charts & sortables
+  Object.values(S.charts).forEach(c => c?.destroy?.());
+  S.charts = {};
+  S.sortables.forEach(s => s?.destroy?.());
+  S.sortables = [];
+  S.view = view;
+
+  // Nav highlight
+  document.querySelectorAll('.nav-item[data-view]').forEach(b => {
+    b.classList.toggle('active', b.dataset.view === view);
+  });
+
+  // Page heading
+  const meta = PAGE_META[view] || {};
+  document.getElementById('page-title').textContent = meta.title || view;
+  document.getElementById('page-sub').textContent   = meta.sub   || '';
+
+  // Render with animation
+  const content = document.getElementById('content');
+  content.innerHTML = '';
+  content.classList.remove('view-enter');
+  void content.offsetWidth;
+  content.classList.add('view-enter');
+
+  const views = { dashboard, pipeline, contactos, actividades, configuracion };
+  views[view]?.();
+}
+
+/* ── 7. DASHBOARD ──────────────────────────────────────────── */
+
+function dashboard() {
+  const active      = S.deals.filter(d => d.etapa !== 'ganado' && d.etapa !== 'perdido');
+  const pipeValue   = active.reduce((s, d) => s + (d.valor || 0), 0);
+  const thisMonth   = new Date().getMonth();
+  const wonMonth    = S.deals.filter(d => d.etapa === 'ganado' && new Date(d.actualizadoEn).getMonth() === thisMonth).length;
+  const weekAgo     = Date.now() - 7 * 86_400_000;
+  const actsWeek    = S.actividades.filter(a => a.creadoEn >= weekAgo).length;
+
+  const recentActs  = [...S.actividades].sort((a,b) => b.creadoEn - a.creadoEn).slice(0, 5);
+  const topDeals    = [...active].sort((a,b) => b.valor - a.valor).slice(0, 5);
+
+  document.getElementById('content').innerHTML = `
+  <div class="stats-grid">
+    ${mkStatCard('🎯','Leads activos',       active.length,     '#EEF2FF','#4338CA')}
+    ${mkStatCard('💰','Valor del pipeline',  fmtMXN(pipeValue), '#F0FDFB','#0D9488')}
+    ${mkStatCard('✅','Ganados este mes',     wonMonth,          '#D1FAE5','#10B981')}
+    ${mkStatCard('📋','Actividades / semana',actsWeek,          '#FEF3C7','#F59E0B')}
+  </div>
+
+  <div class="dashboard-cols">
+    <div class="chart-card">
+      <div class="chart-title">Pipeline por etapa</div>
+      <div class="chart-sub">Valor de deals activos por etapa (MXN)</div>
+      <div class="chart-canvas"><canvas id="chart-bar"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Distribución de deals</div>
+      <div class="chart-sub">Cantidad de deals por estado actual</div>
+      <div class="chart-canvas"><canvas id="chart-donut"></canvas></div>
+    </div>
+  </div>
+
+  <div class="dashboard-bottom">
+    <div class="chart-card">
+      <div class="panel-title">Actividades recientes</div>
+      ${recentActs.length
+        ? recentActs.map(a => miniActHTML(a)).join('')
+        : emptyState('📋','Sin actividades','Registra tu primera interacción.')}
+    </div>
+    <div class="chart-card">
+      <div class="panel-title">Top deals en pipeline</div>
+      ${topDeals.length
+        ? topDeals.map(d => miniDealHTML(d)).join('')
+        : emptyState('⭐','Sin deals activos','Agrega deals al pipeline.')}
+    </div>
+  </div>`;
+
+  requestAnimationFrame(buildCharts);
+}
+
+function mkStatCard(icon, label, value, bg, iconColor) {
+  return `<div class="stat-card">
+    <div class="stat-icon" style="background:${bg}"><span style="font-size:20px">${icon}</span></div>
+    <div class="stat-label">${label}</div>
+    <div class="stat-value" style="color:${iconColor}">${value}</div>
+  </div>`;
+}
+
+function emptyState(icon, title, desc) {
+  return `<div class="empty" style="padding:24px 16px">
+    <div class="empty-icon">${icon}</div>
+    <p class="empty-title">${title}</p>
+    <p class="empty-desc" style="margin-bottom:0">${desc}</p>
+  </div>`;
+}
+
+function miniActHTML(a) {
+  const c = getContacto(a.contactoId);
+  return `<div class="act-mini">
+    <div class="act-icon" style="background:${ACT_BG[a.tipo]||'#f8f9fb'}">${ACT_ICONS[a.tipo]||'📌'}</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12px;font-weight:600;color:var(--ink)">${escapeHTML(c?.nombre||'—')}
+        <span style="font-size:11px;font-weight:400;color:var(--n-500)"> · ${ACT_LABELS[a.tipo]||a.tipo}</span>
+      </div>
+      <div class="act-desc">${escapeHTML(a.descripcion)}</div>
+    </div>
+    <div class="act-time">${timeAgo(a.creadoEn)}</div>
+  </div>`;
+}
+
+function miniDealHTML(d) {
+  const c = getContacto(d.contactoId);
+  const e = getEtapa(d.etapa);
+  return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--n-100)">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(d.titulo)}</div>
+      <div style="font-size:11px;color:var(--n-500)">${escapeHTML(c?.nombre||'—')}</div>
+    </div>
+    <div style="text-align:right;flex-shrink:0">
+      <div class="money" style="font-size:14px;font-weight:700;color:var(--indigo)">${fmtMXN(d.valor)}</div>
+      <span class="badge" style="background:${e.bg};color:${e.tc};font-size:10px;padding:1px 7px">${e.label}</span>
+    </div>
+  </div>`;
+}
+
+function buildCharts() {
+  // Bar chart — pipeline value by stage
+  const barEl = document.getElementById('chart-bar');
+  if (barEl) {
+    const active = ETAPAS.filter(e => e.id !== 'ganado' && e.id !== 'perdido');
+    const vals   = active.map(e => S.deals.filter(d => d.etapa === e.id).reduce((s,d) => s+(d.valor||0), 0));
+    S.charts.bar = new Chart(barEl, {
+      type: 'bar',
+      data: {
+        labels: active.map(e => `${e.emoji} ${e.label}`),
+        datasets: [{ data:vals, backgroundColor:active.map(e=>e.bg), borderColor:active.map(e=>e.color), borderWidth:2, borderRadius:8 }]
+      },
+      options: {
+        indexAxis:'y', responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: ctx => ' '+fmtMXN(ctx.raw) } } },
+        scales:{
+          x:{ grid:{ color:'#E4E8F0' }, ticks:{ callback:v=>fmtMXN(v), font:{family:'Space Grotesk, system-ui',size:10} } },
+          y:{ grid:{ display:false }, ticks:{ font:{family:'Space Grotesk, system-ui',size:11} } },
+        }
+      }
+    });
+  }
+
+  // Doughnut — deals count by stage
+  const donutEl = document.getElementById('chart-donut');
+  if (donutEl) {
+    const counts = ETAPAS.map(e => S.deals.filter(d => d.etapa === e.id).length);
+    if (counts.every(v => v === 0)) {
+      donutEl.closest('.chart-canvas').innerHTML = emptyState('📊','Sin datos','Agrega deals para ver la distribución.');
+      return;
+    }
+    S.charts.donut = new Chart(donutEl, {
+      type: 'doughnut',
+      data: {
+        labels:   ETAPAS.map(e => e.label),
+        datasets: [{ data:counts, backgroundColor:ETAPAS.map(e=>e.bg), borderColor:ETAPAS.map(e=>e.color), borderWidth:2 }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false, cutout:'68%',
+        plugins:{
+          legend:{ position:'right', labels:{ font:{family:'Space Grotesk, system-ui',size:11}, boxWidth:12, padding:10 } },
+          tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${ctx.raw} deal${ctx.raw!==1?'s':''}` } }
+        }
+      }
+    });
+  }
+}
+
+/* ── 8. PIPELINE KANBAN ─────────────────────────────────────── */
+
+function pipeline() {
+  const totalActive = S.deals.filter(d => d.etapa !== 'ganado' && d.etapa !== 'perdido').reduce((s,d) => s+d.valor, 0);
+
+  let html = `
+  <div class="pipeline-header">
+    <span style="font-size:13px;color:var(--n-500)">Pipeline activo: <strong style="color:var(--indigo)">${fmtMXN(totalActive)}</strong></span>
+    <button class="btn btn-primary" onclick="openDealModal()">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Nuevo deal
+    </button>
+  </div>
+  <div class="pipeline-wrap">`;
+
+  ETAPAS.forEach(e => {
+    const deals    = dealsByEtapa(e.id);
+    const colValue = deals.reduce((s,d) => s+(d.valor||0), 0);
+    html += `
+    <div class="kanban-col">
+      <div class="kanban-head" style="background:${e.bg};color:${e.tc}">
+        <span>${e.emoji} ${e.label}</span>
+        <span class="col-count">${deals.length}</span>
+      </div>
+      ${colValue > 0 ? `<div style="font-size:11px;color:var(--n-500);padding:2px 6px 4px;font-weight:600">${fmtMXN(colValue)}</div>` : ''}
+      <div class="kanban-cards" data-etapa="${e.id}">
+        ${deals.map(d => dealCardHTML(d)).join('')}
+      </div>
+      <button class="kanban-add" onclick="openDealModal(null,'${e.id}')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Añadir deal
+      </button>
+    </div>`;
+  });
+
+  html += '</div>';
+  document.getElementById('content').innerHTML = html;
+  initKanbanSortable();
+}
+
+function dealCardHTML(d) {
+  const c    = getContacto(d.contactoId);
+  const over = isOverdue(d.fechaLimite) && d.etapa !== 'ganado' && d.etapa !== 'perdido';
+  return `<div class="deal-card" data-id="${d.id}" ondblclick="openDealModal('${d.id}')">
+    <div class="deal-title">${escapeHTML(d.titulo)}</div>
+    ${c ? `<div class="deal-contact-chip">
+      <div class="mini-avatar">${initials(c.nombre)}</div>${escapeHTML(c.nombre)}
+    </div>` : ''}
+    <div class="deal-value">${fmtMXN(d.valor)}</div>
+    <div class="deal-footer">
+      <div class="deal-next">${d.proximaAccion ? '→ '+escapeHTML(d.proximaAccion) : ''}</div>
+      ${d.fechaLimite ? `<div class="deal-date${over?' overdue':''}">${over?'⚠️ ':''}${fmtDate(d.fechaLimite)}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+function initKanbanSortable() {
+  if (typeof Sortable === 'undefined') return;
+  document.querySelectorAll('.kanban-cards').forEach(el => {
+    const inst = new Sortable(el, {
+      group:       'kanban',
+      animation:   200,
+      ghostClass:  'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      onEnd(evt) {
+        const dealId   = evt.item.dataset.id;
+        const newEtapa = evt.to.dataset.etapa;
+        if (!dealId || !newEtapa) return;
+        const deal = S.deals.find(d => d.id === dealId);
+        if (deal && deal.etapa !== newEtapa) {
+          deal.etapa = newEtapa;
+          deal.actualizadoEn = Date.now();
+          saveState();
+          // Refresh counts
+          document.querySelectorAll('.kanban-col').forEach(col => {
+            const etapa = col.querySelector('.kanban-cards')?.dataset?.etapa;
+            const count = col.querySelectorAll('.deal-card').length;
+            const badge = col.querySelector('.col-count');
+            if (badge) badge.textContent = count;
+          });
+          toast('Deal movido', `→ ${getEtapa(newEtapa).label}`, 'success');
+        }
+      }
+    });
+    S.sortables.push(inst);
+  });
+}
+
+/* ── 9. CONTACTOS ──────────────────────────────────────────── */
+
+function contactos() {
+  const q     = S.searchQuery.toLowerCase();
+  const filt  = S.filterFuente;
+  let list    = [...S.contactos];
+  if (q)    list = list.filter(c => `${c.nombre} ${c.empresa} ${c.whatsapp}`.toLowerCase().includes(q));
+  if (filt) list = list.filter(c => c.fuente === filt);
+  list.sort((a,b) => b.actualizadoEn - a.actualizadoEn);
+
+  const fuentes = [...new Set(S.contactos.map(c => c.fuente))];
+
+  document.getElementById('content').innerHTML = `
+  <div class="view-header">
+    <span class="badge badge-neutral">${S.contactos.length} contactos</span>
+    <div class="view-filters">
+      <input type="search" class="filter-input" placeholder="🔍 Buscar..." value="${escapeHTML(q)}" oninput="filterContacts(this.value)">
+      <select class="filter-input" onchange="filterFuente(this.value)">
+        <option value="">Todas las fuentes</option>
+        ${fuentes.map(f => `<option value="${f}"${filt===f?' selected':''}>${escapeHTML(f)}</option>`).join('')}
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="exportCSV('contactos')" title="Exportar CSV">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        CSV
+      </button>
+      <button class="btn btn-primary" onclick="openContactoModal()">+ Contacto</button>
+    </div>
+  </div>
+  ${list.length === 0
+    ? `<div class="empty"><div class="empty-icon">👥</div><p class="empty-title">Sin contactos</p><p class="empty-desc">Agrega tu primer prospecto para empezar.</p><button class="btn btn-primary" onclick="openContactoModal()">+ Nuevo contacto</button></div>`
+    : `<div class="contacts-table-wrap">
+        <table class="contacts-table">
+          <thead><tr>
+            <th>Contacto</th><th>Empresa</th><th>Fuente</th>
+            <th>Monto est.</th><th>Actualización</th><th>Acciones</th>
+          </tr></thead>
+          <tbody>${list.map(contactRowHTML).join('')}</tbody>
+        </table>
+      </div>`
+  }`;
+}
+
+function contactRowHTML(c) {
+  return `<tr onclick="openDetalleModal('${c.id}')" title="Ver detalle de ${escapeHTML(c.nombre)}">
+    <td><div class="contact-row-name">
+      <div class="contact-avatar">${initials(c.nombre)}</div>
+      <div>
+        <div class="contact-name">${escapeHTML(c.nombre)}</div>
+        <div class="contact-email">${escapeHTML(c.email||'—')}</div>
+      </div>
+    </div></td>
+    <td style="font-size:13px;color:var(--n-600)">${escapeHTML(c.empresa||'—')}</td>
+    <td><span class="badge badge-indigo">${escapeHTML(c.fuente)}</span></td>
+    <td class="money" style="font-size:13px">${fmtMXN(c.monto)}</td>
+    <td style="font-size:12px;color:var(--n-500)">${timeAgo(c.actualizadoEn)}</td>
+    <td onclick="event.stopPropagation()"><div class="table-actions">
+      <a href="https://wa.me/52${c.whatsapp}?text=Hola%20${encodeURIComponent(c.nombre)}%2C%20te%20contacto%20de%20NODE." target="_blank" rel="noopener noreferrer" class="contact-wa-btn" title="Abrir WhatsApp">💬</a>
+      <button class="icon-btn" onclick="openContactoModal('${c.id}')" title="Editar">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+      <button class="icon-btn danger" onclick="deleteContacto('${c.id}')" title="Eliminar">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+      </button>
+    </div></td>
+  </tr>`;
+}
+
+const filterContacts = (q) => { S.searchQuery = q; contactos(); };
+const filterFuente   = (f) => { S.filterFuente = f; contactos(); };
+
+/* ── 10. ACTIVIDADES ────────────────────────────────────────── */
+
+function actividades() {
+  const filt = S.filterActTipo;
+  const list = (filt ? S.actividades.filter(a => a.tipo === filt) : [...S.actividades])
+    .sort((a,b) => b.creadoEn - a.creadoEn);
+
+  const filterBtns = [['','Todas','🗂️'], ...Object.keys(ACT_ICONS).map(k => [k, ACT_LABELS[k], ACT_ICONS[k]])]
+    .map(([id, lbl, icon]) => `<button class="filter-btn${filt===id?' active':''}" onclick="filterActTipo('${id}')">${icon} ${lbl}</button>`)
+    .join('');
+
+  document.getElementById('content').innerHTML = `
+  <div class="view-header" style="margin-bottom:12px">
+    <span class="badge badge-neutral">${S.actividades.length} registros</span>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost btn-sm" onclick="exportCSV('actividades')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        CSV
+      </button>
+      <button class="btn btn-primary" onclick="openActividadModal()">+ Actividad</button>
+    </div>
+  </div>
+  <div class="activity-filters">${filterBtns}</div>
+  ${list.length === 0
+    ? `<div class="empty"><div class="empty-icon">📋</div><p class="empty-title">Sin actividades</p><p class="empty-desc">Registra tu primera interacción.</p><button class="btn btn-primary" onclick="openActividadModal()">+ Actividad</button></div>`
+    : `<div class="activity-feed">${list.map(actItemHTML).join('')}</div>`
+  }`;
+}
+
+function actItemHTML(a) {
+  const c = getContacto(a.contactoId);
+  return `<div class="activity-item">
+    <div class="act-icon" style="background:${ACT_BG[a.tipo]||'#f8f9fb'}">${ACT_ICONS[a.tipo]||'📌'}</div>
+    <div class="act-body">
+      <div class="act-meta">
+        <span class="act-contact">${escapeHTML(c?.nombre||'Contacto eliminado')}</span>
+        <span class="act-type">${ACT_LABELS[a.tipo]||a.tipo}</span>
+        <span class="act-time">${timeAgo(a.creadoEn)}</span>
+      </div>
+      <p class="act-desc">${escapeHTML(a.descripcion)}</p>
+    </div>
+    <button class="icon-btn danger" onclick="deleteActividad('${a.id}')" title="Eliminar">
+      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+    </button>
+  </div>`;
+}
+
+const filterActTipo = (t) => { S.filterActTipo = t; actividades(); };
+
+/* ── 11. CONFIGURACIÓN ─────────────────────────────────────── */
+
+function configuracion() {
+  const cfg = S.config;
+  const exportRow = (lbl, key, count) => `
+  <div class="export-zone">
+    <div><div class="export-label">${lbl}</div><div class="export-sublabel">${count} registros · CSV</div></div>
+    <button class="btn btn-secondary" onclick="exportCSV('${key}')">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Descargar
+    </button>
+  </div>`;
+
+  document.getElementById('content').innerHTML = `
+  <div class="config-grid">
+    <div class="config-nav">
+      <div style="font-size:11px;font-weight:600;color:var(--n-400);text-transform:uppercase;letter-spacing:.06em;padding:6px 12px;margin-bottom:4px">Secciones</div>
+      <button class="config-nav-item active">🏢 Empresa</button>
+      <button class="config-nav-item">📊 Pipeline</button>
+      <button class="config-nav-item">📦 Exportar</button>
+    </div>
+
+    <div class="config-section">
+      <div class="config-section-title">Datos de la empresa</div>
+      <div class="card" style="display:flex;flex-direction:column;gap:16px">
+        <div class="form-row">
+          <div class="field">
+            <label class="label" for="cfg-empresa">Empresa</label>
+            <input type="text" id="cfg-empresa" class="input" value="${escapeHTML(cfg.empresa)}" placeholder="Tu empresa">
+          </div>
+          <div class="field">
+            <label class="label" for="cfg-usuario">Tu nombre</label>
+            <input type="text" id="cfg-usuario" class="input" value="${escapeHTML(cfg.usuario)}" placeholder="CEO / Dueño">
+          </div>
+        </div>
+        <div class="field">
+          <label class="label" for="cfg-whatsapp">WhatsApp de contacto (con lada)</label>
+          <input type="tel" id="cfg-whatsapp" class="input" value="${escapeHTML(cfg.whatsapp||'')}" placeholder="5512345678">
+        </div>
+        <div><button class="btn btn-primary" onclick="saveConfig()">Guardar cambios</button></div>
+      </div>
+
+      <div class="config-section-title" style="margin-top:24px">Pipeline — etapas configuradas</div>
+      <div class="card">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${ETAPAS.map(e => `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:${e.bg};border-radius:8px">
+            <span>${e.emoji}</span>
+            <span style="font-size:13px;font-weight:600;color:${e.tc};flex:1">${e.label}</span>
+            <span class="badge badge-neutral" style="font-size:10px">${dealsByEtapa(e.id).length} deals</span>
+          </div>`).join('')}
+        </div>
+        <p style="font-size:12px;color:var(--n-400);margin-top:10px">Edición visual de etapas disponible en Fase 2.</p>
+      </div>
+
+      <div class="config-section-title" style="margin-top:24px">Exportar datos</div>
+      ${exportRow('Contactos',   'contactos',   S.contactos.length)}
+      ${exportRow('Deals',       'deals',       S.deals.length)}
+      ${exportRow('Actividades', 'actividades', S.actividades.length)}
+
+      <div style="padding:14px 16px;background:var(--err-light);border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:8px">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--err-dark)">⚠️ Borrar todos los datos</div>
+          <div style="font-size:12px;color:var(--err-dark)">Elimina contactos, deals y actividades permanentemente.</div>
+        </div>
+        <button class="btn btn-danger-outline" onclick="resetData()">Resetear CRM</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function saveConfig() {
+  S.config.empresa  = document.getElementById('cfg-empresa')?.value.trim()  || S.config.empresa;
+  S.config.usuario  = document.getElementById('cfg-usuario')?.value.trim()  || S.config.usuario;
+  S.config.whatsapp = document.getElementById('cfg-whatsapp')?.value.trim() || '';
+  saveState();
+  document.getElementById('sidebar-user-name').textContent = S.config.usuario;
+  document.getElementById('sidebar-avatar').textContent    = initials(S.config.usuario);
+  toast('Guardado', 'Datos de empresa actualizados.', 'success');
+}
+
+function resetData() {
+  if (!confirm('¿Seguro? Esta acción borrará TODOS los contactos, deals y actividades.')) return;
+  S.contactos = []; S.deals = []; S.actividades = [];
+  saveState();
+  navigate('dashboard');
+  toast('CRM reiniciado', 'Todos los datos han sido eliminados.', 'warn');
+}
+
+/* ── 12. MODALES — control ─────────────────────────────────── */
+
+function openModal(id) {
+  document.getElementById('modal-overlay').classList.remove('hidden');
+  document.getElementById('modal-overlay').removeAttribute('aria-hidden');
+  document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
+  document.getElementById(id)?.classList.remove('hidden');
+}
+
+function closeModal(id) {
+  document.getElementById(id)?.classList.add('hidden');
+  const anyOpen = [...document.querySelectorAll('.modal')].some(m => !m.classList.contains('hidden'));
+  if (!anyOpen) closeAllModals();
+}
+
+function closeAllModals() {
+  document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
+  const ov = document.getElementById('modal-overlay');
+  ov.classList.add('hidden');
+  ov.setAttribute('aria-hidden', 'true');
+}
+
+/* ── 13. MODAL — CONTACTO ──────────────────────────────────── */
+
+function openContactoModal(id = null) {
+  const c = id ? S.contactos.find(x => x.id === id) : null;
+  document.getElementById('modal-contacto-title').textContent = c ? 'Editar Contacto' : 'Nuevo Contacto';
+  document.getElementById('contacto-id').value = c?.id   || '';
+  document.getElementById('c-nombre').value    = c?.nombre   || '';
+  document.getElementById('c-empresa').value   = c?.empresa  || '';
+  document.getElementById('c-whatsapp').value  = c?.whatsapp || '';
+  document.getElementById('c-email').value     = c?.email    || '';
+  document.getElementById('c-fuente').value    = c?.fuente   || 'Instagram';
+  document.getElementById('c-monto').value     = c?.monto    || '';
+  document.getElementById('c-notas').value     = c?.notas    || '';
+  openModal('modal-contacto');
+  setTimeout(() => document.getElementById('c-nombre').focus(), 80);
+}
+
+function saveContacto() {
+  const nombre = document.getElementById('c-nombre').value.trim();
+  const wa     = document.getElementById('c-whatsapp').value.trim();
+  if (!nombre) { toast('Requerido', 'El nombre es obligatorio.', 'error'); return; }
+  if (!wa)     { toast('Requerido', 'El WhatsApp es obligatorio.', 'error'); return; }
+
+  const id  = document.getElementById('contacto-id').value;
+  const now = Date.now();
+  const data = {
+    nombre,
+    empresa:      document.getElementById('c-empresa').value.trim(),
+    whatsapp:     wa,
+    email:        document.getElementById('c-email').value.trim(),
+    fuente:       document.getElementById('c-fuente').value,
+    monto:        parseFloat(document.getElementById('c-monto').value) || 0,
+    notas:        document.getElementById('c-notas').value.trim(),
+    actualizadoEn:now,
+  };
+
+  if (id) {
+    const i = S.contactos.findIndex(c => c.id === id);
+    if (i >= 0) S.contactos[i] = { ...S.contactos[i], ...data };
+    toast('Actualizado', nombre, 'success');
+  } else {
+    S.contactos.push({ id:'c'+uid(), creadoEn:now, ...data });
+    toast('Contacto creado', nombre, 'success');
+  }
+
+  saveState(); closeAllModals();
+  if (S.view === 'contactos') contactos();
+  else if (S.view === 'dashboard') dashboard();
+}
+
+function deleteContacto(id) {
+  const c = S.contactos.find(x => x.id === id);
+  if (!c || !confirm(`¿Eliminar a ${c.nombre}? Sus deals y actividades también serán eliminados.`)) return;
+  S.contactos   = S.contactos.filter(x => x.id !== id);
+  S.deals       = S.deals.filter(d => d.contactoId !== id);
+  S.actividades = S.actividades.filter(a => a.contactoId !== id);
+  saveState(); closeAllModals();
+  if (S.view === 'contactos') contactos();
+  else navigate(S.view);
+  toast('Eliminado', c.nombre, 'warn');
+}
+
+/* ── 14. MODAL — DEAL ──────────────────────────────────────── */
+
+function openDealModal(id = null, etapaDefault = null) {
+  const d = id ? S.deals.find(x => x.id === id) : null;
+
+  document.getElementById('d-contacto').innerHTML =
+    '<option value="">— Selecciona contacto —</option>' +
+    S.contactos.map(c => `<option value="${c.id}"${d?.contactoId===c.id?' selected':''}>${escapeHTML(c.nombre)}</option>`).join('');
+
+  document.getElementById('d-etapa').innerHTML =
+    ETAPAS.map(e => `<option value="${e.id}"${(d?.etapa||etapaDefault||'nuevo')===e.id?' selected':''}>${e.emoji} ${e.label}</option>`).join('');
+
+  document.getElementById('modal-deal-title').textContent = d ? 'Editar Deal' : 'Nuevo Deal';
+  document.getElementById('deal-id').value     = d?.id            || '';
+  document.getElementById('d-titulo').value    = d?.titulo        || '';
+  document.getElementById('d-valor').value     = d?.valor         || '';
+  document.getElementById('d-fecha').value     = d?.fechaLimite   || '';
+  document.getElementById('d-proxima').value   = d?.proximaAccion || '';
+  document.getElementById('d-notas').value     = d?.notas         || '';
+  openModal('modal-deal');
+  setTimeout(() => document.getElementById('d-titulo').focus(), 80);
+}
+
+function saveDeal() {
+  const titulo     = document.getElementById('d-titulo').value.trim();
+  const contactoId = document.getElementById('d-contacto').value;
+  const valor      = parseFloat(document.getElementById('d-valor').value) || 0;
+  if (!titulo)     { toast('Requerido','El título es obligatorio.','error'); return; }
+  if (!contactoId) { toast('Requerido','Selecciona un contacto.','error');   return; }
+
+  const id  = document.getElementById('deal-id').value;
+  const now = Date.now();
+  const data = {
+    titulo, contactoId, valor,
+    etapa:         document.getElementById('d-etapa').value,
+    fechaLimite:   document.getElementById('d-fecha').value,
+    proximaAccion: document.getElementById('d-proxima').value.trim(),
+    notas:         document.getElementById('d-notas').value.trim(),
+    actualizadoEn: now,
+  };
+
+  if (id) {
+    const i = S.deals.findIndex(d => d.id === id);
+    if (i >= 0) S.deals[i] = { ...S.deals[i], ...data };
+    toast('Deal actualizado', titulo, 'success');
+  } else {
+    S.deals.push({ id:'d'+uid(), creadoEn:now, ...data });
+    toast('Deal creado', titulo, 'success');
+  }
+
+  saveState(); closeAllModals();
+  if (S.view === 'pipeline')   pipeline();
+  else if (S.view === 'dashboard') dashboard();
+}
+
+function deleteDeal(id) {
+  const d = S.deals.find(x => x.id === id);
+  if (!d || !confirm(`¿Eliminar el deal "${d.titulo}"?`)) return;
+  S.deals = S.deals.filter(x => x.id !== id);
+  saveState(); closeAllModals();
+  if (S.view === 'pipeline') pipeline();
+  toast('Eliminado', d.titulo, 'warn');
+}
+
+/* ── 15. MODAL — ACTIVIDAD ─────────────────────────────────── */
+
+function openActividadModal(preselContactoId = null) {
+  document.getElementById('act-contacto').innerHTML =
+    '<option value="">— Elige contacto —</option>' +
+    S.contactos.map(c => `<option value="${c.id}"${preselContactoId===c.id?' selected':''}>${escapeHTML(c.nombre)}</option>`).join('');
+  document.getElementById('act-descripcion').value = '';
+  document.getElementById('act-tipo').value = 'whatsapp';
+  openModal('modal-actividad');
+  setTimeout(() => document.getElementById('act-descripcion').focus(), 80);
+}
+
+function saveActividad() {
+  const desc = document.getElementById('act-descripcion').value.trim();
+  if (!desc) { toast('Requerido', 'La descripción es obligatoria.', 'error'); return; }
+
+  const now  = Date.now();
+  const cid  = document.getElementById('act-contacto').value || null;
+  const act  = { id:'a'+uid(), tipo:document.getElementById('act-tipo').value, contactoId:cid, descripcion:desc, creadoEn:now };
+  S.actividades.push(act);
+
+  if (cid) {
+    const c = S.contactos.find(x => x.id === cid);
+    if (c) c.actualizadoEn = now;
+  }
+
+  saveState(); closeAllModals();
+  if (S.view === 'actividades') actividades();
+  else if (S.view === 'dashboard') dashboard();
+  toast('Actividad registrada', ACT_LABELS[act.tipo], 'success');
+}
+
+function deleteActividad(id) {
+  S.actividades = S.actividades.filter(a => a.id !== id);
+  saveState(); actividades();
+  toast('Eliminada', '', 'warn');
+}
+
+/* ── 16. MODAL — DETALLE CONTACTO ─────────────────────────── */
+
+function openDetalleModal(cid) {
+  const c = S.contactos.find(x => x.id === cid);
+  if (!c) return;
+
+  document.getElementById('detalle-nombre').textContent  = c.nombre;
+  document.getElementById('detalle-empresa').textContent = c.empresa || '—';
+  document.getElementById('detalle-avatar').textContent  = initials(c.nombre);
+
+  // Info block
+  document.getElementById('detalle-info-block').innerHTML = `
+  <div>${[
+    ['📱 WhatsApp', c.whatsapp||'—'],
+    ['📧 Email',    c.email||'—'],
+    ['🏢 Empresa',  c.empresa||'—'],
+    ['📣 Fuente',   c.fuente||'—'],
+    ['💰 Monto est.',fmtMXN(c.monto)],
+    ['📅 Creado',   fmtDate(c.creadoEn)],
+  ].map(([k,v]) => `<div class="info-row"><strong>${k}</strong><span>${escapeHTML(String(v))}</span></div>`).join('')}
+  </div>
+  ${c.notas ? `<div style="background:var(--n-50);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--n-600);border:1px solid var(--n-200);margin-top:8px">${escapeHTML(c.notas)}</div>` : ''}`;
+
+  // Deals block
+  const deals = dealsByContact(cid);
+  document.getElementById('detalle-deals-block').innerHTML = `
+  <div class="detalle-col-title">Deals <span class="badge badge-neutral" style="font-size:10px">${deals.length}</span></div>
+  ${deals.length === 0
+    ? '<p style="font-size:12px;color:var(--n-400)">Sin deals registrados.</p>'
+    : deals.map(d => {
+        const e = getEtapa(d.etapa);
+        return `<div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--n-50);border-radius:8px;border:1px solid var(--n-200);margin-bottom:6px">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600">${escapeHTML(d.titulo)}</div>
+            <span class="badge" style="background:${e.bg};color:${e.tc};font-size:10px">${e.label}</span>
+          </div>
+          <div class="money" style="font-size:14px;font-weight:700;color:var(--indigo)">${fmtMXN(d.valor)}</div>
+        </div>`;
+      }).join('')
+  }
+  <button class="btn btn-secondary btn-sm" style="width:100%;margin-top:6px" onclick="openDealModal(null,null);setTimeout(()=>{document.getElementById('d-contacto').value='${cid}'},50)">+ Nuevo deal</button>`;
+
+  // Activities
+  const acts = actsByContact(cid).slice(0, 8);
+  document.getElementById('detalle-act-list').innerHTML = acts.length === 0
+    ? '<p style="font-size:12px;color:var(--n-400)">Sin actividades registradas.</p>'
+    : acts.map(a => `<div class="act-mini">
+        <div class="act-icon" style="background:${ACT_BG[a.tipo]||'#f8f9fb'}">${ACT_ICONS[a.tipo]||'📌'}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;font-weight:600;color:var(--n-600)">${ACT_LABELS[a.tipo]||a.tipo}</div>
+          <div class="act-desc">${escapeHTML(a.descripcion)}</div>
+        </div>
+        <div class="act-time">${timeAgo(a.creadoEn)}</div>
+      </div>`).join('');
+
+  // Footer button handlers
+  document.getElementById('btn-edit-from-detalle').onclick    = () => { closeAllModals(); openContactoModal(cid); };
+  document.getElementById('btn-delete-from-detalle').onclick  = () => deleteContacto(cid);
+  document.getElementById('btn-add-act-detalle').onclick      = () => { closeAllModals(); openActividadModal(cid); };
+  document.getElementById('btn-detalle-wa').onclick           = () => window.open(`https://wa.me/52${c.whatsapp}?text=Hola%20${encodeURIComponent(c.nombre)}%2C%20te%20contacto%20de%20NODE.`,'_blank','noopener');
+
+  openModal('modal-detalle');
+}
+
+/* ── 17. EXPORTAR CSV ──────────────────────────────────────── */
+
+function exportCSV(type) {
+  let rows = [], filename = '';
+
+  if (type === 'contactos') {
+    filename = 'node-crm-contactos.csv';
+    rows = [['ID','Nombre','Empresa','WhatsApp','Email','Fuente','Monto MXN','Notas','Creado']];
+    S.contactos.forEach(c => rows.push([c.id, c.nombre, c.empresa, c.whatsapp, c.email, c.fuente, c.monto, c.notas, fmtDate(c.creadoEn)]));
+  } else if (type === 'deals') {
+    filename = 'node-crm-deals.csv';
+    rows = [['ID','Título','Contacto','Valor MXN','Etapa','Fecha Límite','Próxima Acción','Notas']];
+    S.deals.forEach(d => rows.push([d.id, d.titulo, getContacto(d.contactoId)?.nombre||'', d.valor, getEtapa(d.etapa).label, d.fechaLimite, d.proximaAccion, d.notas]));
+  } else if (type === 'actividades') {
+    filename = 'node-crm-actividades.csv';
+    rows = [['ID','Tipo','Contacto','Descripción','Fecha']];
+    S.actividades.forEach(a => rows.push([a.id, ACT_LABELS[a.tipo]||a.tipo, getContacto(a.contactoId)?.nombre||'', a.descripcion, fmtDate(a.creadoEn)]));
+  }
+
+  const csv  = rows.map(r => r.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], { type:'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement('a'), { href:url, download:filename });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast('CSV exportado', filename, 'success');
+}
+
+/* ── 18. BÚSQUEDA ──────────────────────────────────────────── */
+
+function setupSearch() {
+  const inp = document.getElementById('global-search');
+
+  inp.addEventListener('input', e => {
+    const q = e.target.value.trim().toLowerCase();
+    q ? showSearchResults(q) : closeSearchDropdown();
+  });
+
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { inp.value = ''; closeSearchDropdown(); inp.blur(); }
+  });
+
+  document.addEventListener('click', e => {
+    if (!inp.closest('.search-wrap').contains(e.target)) closeSearchDropdown();
+  });
+}
+
+function showSearchResults(q) {
+  closeSearchDropdown();
+  const contacts = S.contactos.filter(c => `${c.nombre} ${c.empresa}`.toLowerCase().includes(q)).slice(0, 4);
+  const deals    = S.deals.filter(d => d.titulo.toLowerCase().includes(q)).slice(0, 3);
+  if (!contacts.length && !deals.length) return;
+
+  const box = document.createElement('div');
+  box.className = 'search-results'; box.id = 'search-dropdown';
+  let html = '';
+
+  if (contacts.length) {
+    html += '<div class="sr-section">Contactos</div>';
+    contacts.forEach(c => {
+      html += `<div class="sr-item" onclick="openDetalleModal('${c.id}');closeSearchDropdown()">
+        <div style="width:26px;height:26px;border-radius:50%;background:var(--indigo-100);color:var(--indigo);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${initials(c.nombre)}</div>
+        <span style="flex:1">${escapeHTML(c.nombre)}</span>
+        <span style="font-size:11px;color:var(--n-400)">${escapeHTML(c.empresa||'')}</span>
+        <span class="sr-tag">Contacto</span>
+      </div>`;
+    });
+  }
+  if (deals.length) {
+    html += '<div class="sr-section">Deals</div>';
+    deals.forEach(d => {
+      const e = getEtapa(d.etapa);
+      html += `<div class="sr-item" onclick="openDealModal('${d.id}');closeSearchDropdown()">
+        <span style="flex:1">${escapeHTML(d.titulo)}</span>
+        <span class="sr-tag" style="background:${e.bg};color:${e.tc}">${e.label}</span>
+      </div>`;
+    });
+  }
+
+  box.innerHTML = html;
+  document.querySelector('.search-wrap').appendChild(box);
+}
+
+const closeSearchDropdown = () => document.getElementById('search-dropdown')?.remove();
+
+/* ── 19. MENÚ RÁPIDO ───────────────────────────────────────── */
+
+function setupQuickMenu() {
+  const btn  = document.getElementById('btn-quick-add');
+  const menu = document.getElementById('quick-menu');
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const r = btn.getBoundingClientRect();
+    menu.style.top   = (r.bottom + 6) + 'px';
+    menu.style.right = (window.innerWidth - r.right) + 'px';
+    menu.classList.toggle('hidden');
+  });
+
+  document.getElementById('qa-contacto')?.addEventListener('click', () => { closeQuickMenu(); openContactoModal(); });
+  document.getElementById('qa-deal')?.addEventListener('click',     () => { closeQuickMenu(); openDealModal(); });
+  document.getElementById('qa-actividad')?.addEventListener('click',() => { closeQuickMenu(); openActividadModal(); });
+
+  document.addEventListener('click', closeQuickMenu);
+}
+
+const closeQuickMenu = () => document.getElementById('quick-menu')?.classList.add('hidden');
+
+/* ── 20. ATAJOS DE TECLADO ─────────────────────────────────── */
+
+function setupKeyboard() {
+  document.addEventListener('keydown', e => {
+    const inField = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
+
+    // Alt + 1–5 — navegación
+    if (e.altKey && e.key >= '1' && e.key <= '5') {
+      e.preventDefault();
+      const v = ['dashboard','pipeline','contactos','actividades','configuracion'][+e.key - 1];
+      if (v) navigate(v);
+      return;
+    }
+
+    // Esc — cerrar todo
+    if (e.key === 'Escape') {
+      closeAllModals(); closeQuickMenu();
+      document.getElementById('shortcuts-panel')?.classList.add('hidden');
+      closeSearchDropdown();
+      return;
+    }
+
+    if (inField) return;
+
+    switch (e.key) {
+      case '?': document.getElementById('shortcuts-panel')?.classList.toggle('hidden'); break;
+      case 'n': case 'N': openContactoModal(); break;
+      case 'd': case 'D': openDealModal();     break;
+      case 'a': case 'A': openActividadModal();break;
+      default:
+        if ((e.ctrlKey||e.metaKey) && e.key==='k') {
+          e.preventDefault();
+          document.getElementById('global-search').focus();
+        }
+    }
+  });
+}
+
+/* ── 21. TOASTS ────────────────────────────────────────────── */
+
+function toast(title, msg='', type='success') {
+  const ICONS = { success:'✅', error:'❌', warn:'⚠️', info:'ℹ️' };
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.innerHTML = `
+    <span class="toast-icon">${ICONS[type]||'📌'}</span>
+    <div class="toast-body">
+      <div class="toast-title">${escapeHTML(title)}</div>
+      ${msg ? `<div class="toast-msg">${escapeHTML(msg)}</div>` : ''}
+    </div>`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 250); }, 3500);
+}
+
+/* ── 22. WIRING ────────────────────────────────────────────── */
+
+function wireUpButtons() {
+  // Sidebar nav
+  document.querySelectorAll('.nav-item[data-view]').forEach(btn => {
+    btn.addEventListener('click', () => navigate(btn.dataset.view));
+  });
+
+  // Modal close — data-close buttons
+  document.querySelectorAll('[data-close]').forEach(btn => {
+    btn.addEventListener('click', () => closeModal(btn.dataset.close));
+  });
+
+  // Modal overlay click-outside
+  document.getElementById('modal-overlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeAllModals();
+  });
+
+  // Save buttons
+  document.getElementById('btn-save-contacto')?.addEventListener('click', saveContacto);
+  document.getElementById('btn-save-deal')?.addEventListener('click',     saveDeal);
+  document.getElementById('btn-save-actividad')?.addEventListener('click', saveActividad);
+
+  // Enter inside forms (except textarea)
+  document.querySelectorAll('.modal form').forEach(form => {
+    form.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        form.closest('.modal')?.querySelector('.btn-primary')?.click();
+      }
+    });
+  });
+
+  // Shortcuts panel
+  document.getElementById('btn-shortcuts')?.addEventListener('click', () => {
+    document.getElementById('shortcuts-panel')?.classList.toggle('hidden');
+  });
+  document.getElementById('shortcuts-close')?.addEventListener('click', () => {
+    document.getElementById('shortcuts-panel')?.classList.add('hidden');
+  });
+  document.getElementById('shortcuts-backdrop')?.addEventListener('click', () => {
+    document.getElementById('shortcuts-panel')?.classList.add('hidden');
+  });
+}
+
+/* ── 23. INIT ──────────────────────────────────────────────── */
+
+function init() {
+  const hasData = loadState();
+  if (!hasData) seedData();
+
+  // Hydrate sidebar user
+  document.getElementById('sidebar-user-name').textContent = S.config.usuario;
+  document.getElementById('sidebar-avatar').textContent    = initials(S.config.usuario);
+
+  wireUpButtons();
+  setupSearch();
+  setupQuickMenu();
+  setupKeyboard();
+
+  navigate('dashboard');
+}
+
+document.addEventListener('DOMContentLoaded', init);
