@@ -6,16 +6,220 @@
 
 'use strict';
 
+/* ═══════════════════════════════════════════════════════════════
+   AUTH — Autenticación con roles (Admin / Ventas)
+   ═══════════════════════════════════════════════════════════════ */
+
+const AUTH_SESSION_KEY   = 'node_crm_session';
+const AUTH_PASSWORDS_KEY = 'node_crm_passwords';
+
+/** Estado en memoria */
+const AUTH = { isAuth: false, role: null }; // 'admin' | 'ventas' /' co ventas'
+
+/** Vistas permitidas por rol */
+const ROLE_VIEWS = {
+  admin:  ['dashboard','pipeline','contactos','actividades','configuracion'],
+  ventas: ['dashboard','pipeline','contactos','actividades'],
+  venta: ['pipline,contactos','actividades'],
+};
+
+const DEFAULT_PWD = { admin: 'admin', ventas: 'ventas' , venta: 'venta'};
+
+/* ── Contraseñas ── */
+function getPasswords() {
+  try {
+    const raw = localStorage.getItem(AUTH_PASSWORDS_KEY);
+    return raw ? { ...DEFAULT_PWD, ...JSON.parse(raw) } : { ...DEFAULT_PWD };
+  } catch { return { ...DEFAULT_PWD }; }
+}
+function persistPasswords(admin, ventas) {
+  localStorage.setItem(AUTH_PASSWORDS_KEY, JSON.stringify({ admin, ventas, venta}));
+}
+
+/* ── Sesión (sessionStorage: se limpia al cerrar la pestaña) ── */
+function restoreSession() {
+  try {
+    const raw = sessionStorage.getItem(AUTH_SESSION_KEY);
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    if (!s?.role) return false;
+    AUTH.isAuth = true; AUTH.role = s.role; return true;
+  } catch { return false; }
+}
+function persistSession(role) { sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ role })); }
+function clearSession()       { sessionStorage.removeItem(AUTH_SESSION_KEY); }
+
+/* ── Guard ── */
+function canAccess(view) {
+  if (!AUTH.isAuth) return false;
+  return (ROLE_VIEWS[AUTH.role] || []).includes(view);
+}
+
+/* ── Login ── */
+function login() {
+  const roleEl  = document.querySelector('.role-card.active');
+  const pwdEl   = document.getElementById('login-pwd');
+  const errEl   = document.getElementById('login-error');
+  const role    = roleEl?.dataset.role;
+  const pwd     = pwdEl?.value || '';
+
+  const showError = (msg) => {
+    errEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> ${msg}`;
+    errEl.classList.remove('hidden');
+    const card = document.querySelector('.login-card');
+    card.classList.add('shake');
+    setTimeout(() => card.classList.remove('shake'), 450);
+    if (pwdEl) { pwdEl.value = ''; pwdEl.focus(); }
+  };
+
+  if (!role) return showError('Selecciona un rol de acceso.');
+  if (!pwd)  return showError('Ingresa tu contraseña.');
+  if (pwd !== getPasswords()[role]) return showError('Contraseña incorrecta. Intenta de nuevo.');
+
+  // ✅ Éxito
+  AUTH.isAuth = true; AUTH.role = role;
+  persistSession(role);
+  errEl.classList.add('hidden');
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  applyRole();
+ wireUpButtons();
+setupSearch();
+setupQuickMenu();
+setupKeyboard();
+
+navigate('dashboard');
+}
+
+/* ── Logout ── */
+function logout() {
+  AUTH.isAuth = false; AUTH.role = null;
+  clearSession();
+  S.view='dashboard'; S.searchQuery=''; S.filterFuente=''; S.filterActTipo='';
+  Object.values(S.charts).forEach(c => c?.destroy?.()); S.charts = {};
+  S.sortables.forEach(s => s?.destroy?.()); S.sortables = [];
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('login-screen').classList.remove('hidden');
+  const pwdEl = document.getElementById('login-pwd');
+  if (pwdEl) { pwdEl.value = ''; pwdEl.type = 'password'; }
+  document.getElementById('login-error')?.classList.add('hidden');
+  document.getElementById('eye-open')?.classList.remove('hidden');
+  document.getElementById('eye-closed')?.classList.add('hidden');
+}
+
+/* ── Aplicar restricciones de rol a la UI ── */
+function applyRole() {
+  const isAdmin = AUTH.role === 'admin';
+  const badge   = document.getElementById('role-badge');
+  if (badge) {
+    badge.textContent = isAdmin ? '👑 Admin' : '📈 Ventas';
+    badge.className   = 'role-badge ' + (isAdmin ? 'role-admin' : 'role-ventas');
+  }
+  document.querySelectorAll('.nav-item[data-view]').forEach(btn => {
+    btn.classList.toggle('hidden', !canAccess(btn.dataset.view));
+  });
+  document.getElementById('sidebar-user-name').textContent = S.config.usuario;
+  document.getElementById('sidebar-avatar').textContent    = initials(S.config.usuario);
+}
+
+/* ── Guardar contraseñas (solo admin) ── */
+function savePasswords() {
+  if (AUTH.role !== 'admin') return;
+  const ap = document.getElementById('cfg-pwd-admin')?.value.trim();
+  const vp = document.getElementById('cfg-pwd-ventas')?.value.trim();
+  if (!ap || !vp)          { toast('Campos requeridos','Rellena las dos contraseñas.','error'); return; }
+  if (ap.length < 6 || vp.length < 6) { toast('Contraseña corta','Mínimo 6 caracteres.','error'); return; }
+  persistPasswords(ap, vp);
+  document.getElementById('cfg-pwd-admin').value  = '';
+  document.getElementById('cfg-pwd-ventas').value = '';
+  toast('Contraseñas actualizadas','Aplican al próximo inicio de sesión.','success');
+}
+
+/* ── Setup del login screen ── */
+function setupLoginScreen() {
+  document.querySelectorAll('.role-card').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.role-card').forEach(c => { c.classList.remove('active'); c.setAttribute('aria-checked','false'); });
+      card.classList.add('active'); card.setAttribute('aria-checked','true');
+      document.getElementById('login-pwd')?.focus();
+    });
+  });
+  document.getElementById('btn-login')?.addEventListener('click', login);
+  document.getElementById('login-pwd')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') login();
+    else document.getElementById('login-error')?.classList.add('hidden');
+  });
+  document.getElementById('btn-toggle-pwd')?.addEventListener('click', () => {
+    const inp = document.getElementById('login-pwd');
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    document.getElementById('eye-open')?.classList.toggle('hidden', show);
+    document.getElementById('eye-closed')?.classList.toggle('hidden', !show);
+  });
+}
+
 /* ── 1. CONSTANTES ─────────────────────────────────────────── */
 
+/* ── Etapas — 3 Fases · 14 Etapas ──────────────────────────── */
 const ETAPAS = [
-  { id:'nuevo',       label:'Nuevo Lead',        emoji:'🔵', color:'#818CF8', bg:'#EEF2FF', tc:'#4338CA' },
-  { id:'contactado',  label:'Contactado',         emoji:'📩', color:'#F59E0B', bg:'#FEF3C7', tc:'#B45309' },
-  { id:'demo',        label:'Demo / Reunión',     emoji:'🎥', color:'#0D9488', bg:'#F0FDFB', tc:'#0F766E' },
-  { id:'propuesta',   label:'Propuesta Enviada',  emoji:'📄', color:'#1D4ED8', bg:'#EFF6FF', tc:'#1D4ED8' },
-  { id:'negociacion', label:'Negociación',         emoji:'🤝', color:'#9333EA', bg:'#F5F3FF', tc:'#7C3AED' },
-  { id:'ganado',      label:'✅ Ganado',            emoji:'✅', color:'#10B981', bg:'#D1FAE5', tc:'#065F46' },
-  { id:'perdido',     label:'❌ Perdido',           emoji:'❌', color:'#EF4444', bg:'#FEE2E2', tc:'#B91C1C' },
+  // ── FASE 1: PROSPECCIÓN (5 etapas) ──────────────────────────
+  { id:'prospecto_id',  label:'Prospecto Identificado', emoji:'🔍', fase:'prospeccion',
+    color:'#818CF8', bg:'#EEF2FF', tc:'#4338CA',
+    gate:'Pain visible, sin contacto aún' },
+  { id:'contacto_env',  label:'Contacto Enviado',        emoji:'📩', fase:'prospeccion',
+    color:'#6366F1', bg:'#E0E7FF', tc:'#3730A3',
+    gate:'Mensaje personalizado <24h de identificar' },
+  { id:'conv_activa',   label:'Conversación Activa',     emoji:'💬', fase:'prospeccion',
+    color:'#4F46E5', bg:'#E0E7FF', tc:'#3730A3',
+    gate:'Prospecto respondió, diálogo abierto' },
+  { id:'diag_agendado', label:'Diagnóstico Agendado',    emoji:'📅', fase:'prospeccion',
+    color:'#4338CA', bg:'#C7D2FE', tc:'#312E81',
+    gate:'Fecha y hora de llamada confirmada' },
+  { id:'opor_cal',      label:'Oportunidad Calificada',  emoji:'⭐', fase:'prospeccion',
+    color:'#3730A3', bg:'#C7D2FE', tc:'#312E81',
+    gate:'MEDDIC ≥4/6 post-llamada' },
+  // ── FASE 2: CIERRE (4 etapas) ───────────────────────────────
+  { id:'propuesta_env', label:'Propuesta Enviada',       emoji:'📄', fase:'cierre',
+    color:'#F59E0B', bg:'#FEF3C7', tc:'#B45309',
+    gate:'Propuesta enviada <24h post-llamada' },
+  { id:'negociacion',   label:'En Negociación',          emoji:'🤝', fase:'cierre',
+    color:'#F97316', bg:'#FFF7ED', tc:'#C2410C',
+    gate:'Prospecto respondió, hay diálogo activo' },
+  { id:'ganado',        label:'Cerrado Ganado ✅',        emoji:'✅', fase:'cierre',
+    color:'#10B981', bg:'#D1FAE5', tc:'#065F46',
+    gate:'Anticipo 50% recibido + contrato firmado' },
+  { id:'perdido',       label:'Cerrado Perdido ❌',       emoji:'❌', fase:'cierre',
+    color:'#EF4444', bg:'#FEE2E2', tc:'#B91C1C',
+    gate:'No explícito O 14 días sin respuesta' },
+  // ── FASE 3: POST-VENTA (5 etapas) ───────────────────────────
+  { id:'onboarding',    label:'Onboarding Activo',       emoji:'🚀', fase:'postventa',
+    color:'#0D9488', bg:'#F0FDFB', tc:'#0F766E',
+    gate:'Plan de 14 días activado post-entrega' },
+  { id:'mantenimiento', label:'Mantenimiento Activo',    emoji:'🔧', fase:'postventa',
+    color:'#0F766E', bg:'#CCFBF1', tc:'#134E4A',
+    gate:'Contrato R1/R2 activo y pagando' },
+  { id:'upsell',        label:'Candidato a Upsell',      emoji:'📈', fase:'postventa',
+    color:'#10B981', bg:'#D1FAE5', tc:'#065F46',
+    gate:'NPS ≥8 + necesidad adicional identificada' },
+  { id:'reactivacion',  label:'En Reactivación',         emoji:'♻️',  fase:'postventa',
+    color:'#F59E0B', bg:'#FEF3C7', tc:'#B45309',
+    gate:'Cliente inactivo >30 días, recontactado' },
+  { id:'referido',      label:'Referido Generado',       emoji:'🌟', fase:'postventa',
+    color:'#8B5CF6', bg:'#F5F3FF', tc:'#7C3AED',
+    gate:'Cliente refirió a 1+ prospecto verificado' },
+];
+
+/* ── Fases ──────────────────────────────────────────────────── */
+const FASES = [
+  { id:'prospeccion', label:'PROSPECCIÓN', n:1,
+    color:'#4338CA', bg:'#EEF2FF', tc:'#312E81',
+    desc:'Identificar y calificar al prospecto correcto' },
+  { id:'cierre',      label:'CIERRE',      n:2,
+    color:'#B45309', bg:'#FEF3C7', tc:'#92400E',
+    desc:'Convertir la oportunidad en cliente pagante' },
+  { id:'postventa',   label:'POST-VENTA',  n:3,
+    color:'#0F766E', bg:'#CCFBF1', tc:'#134E4A',
+    desc:'Retención, crecimiento y generación de referidos' },
 ];
 
 const ACT_ICONS  = { whatsapp:'💬', llamada:'📞', email:'📧', reunion:'🤝', propuesta:'📄', nota:'📝' };
@@ -91,15 +295,18 @@ function seedData() {
   ];
 
   S.deals = [
-    { id:'d1', titulo:'Landing Page Pro',         contactoId:'c1', valor:8000,  etapa:'propuesta',   fechaLimite:'2026-06-20', proximaAccion:'Enviar contrato firmado',      notas:'',                           creadoEn:ago(14), actualizadoEn:ago(2)  },
-    { id:'d2', titulo:'Cotizador Digital Pro',    contactoId:'c2', valor:5500,  etapa:'demo',        fechaLimite:'2026-06-10', proximaAccion:'Demo miércoles 10am',           notas:'',                           creadoEn:ago(18), actualizadoEn:ago(5)  },
-    { id:'d3', titulo:'Bundle Vende Más (B2)',    contactoId:'c3', valor:17200, etapa:'negociacion', fechaLimite:'2026-06-08', proximaAccion:'Revisar términos de pago',      notas:'Quiere pago en 2 parcialidades.', creadoEn:ago(9),  actualizadoEn:ago(1)  },
-    { id:'d4', titulo:'Landing Page Básica',      contactoId:'c4', valor:4500,  etapa:'nuevo',       fechaLimite:'2026-07-01', proximaAccion:'Enviar brief al cliente',       notas:'',                           creadoEn:ago(7),  actualizadoEn:ago(3)  },
-    { id:'d5', titulo:'NODE CRM P6',              contactoId:'c5', valor:12500, etapa:'contactado',  fechaLimite:'2026-06-25', proximaAccion:'Agendar demo del CRM',          notas:'',                           creadoEn:ago(28), actualizadoEn:ago(6)  },
-    { id:'d6', titulo:'Facturador CFDI Básico',   contactoId:'c6', valor:6500,  etapa:'ganado',      fechaLimite:'2026-05-30', proximaAccion:'Entregar en 7 días hábiles',   notas:'Anticipo 50% recibido.',    creadoEn:ago(38), actualizadoEn:ago(0)  },
-    { id:'d7', titulo:'Landing Page Pro',         contactoId:'c7', valor:8000,  etapa:'perdido',     fechaLimite:'2026-05-15', proximaAccion:'—',                            notas:'Eligió agencia local más barata.', creadoEn:ago(23), actualizadoEn:ago(10) },
-    { id:'d8', titulo:'Bundle STARTER (B1)',      contactoId:'c8', valor:8500,  etapa:'propuesta',   fechaLimite:'2026-06-18', proximaAccion:'Follow-up mañana temprano',    notas:'',                           creadoEn:ago(11), actualizadoEn:ago(4)  },
-    { id:'d9', titulo:'Cotizador + Landing Pro',  contactoId:'c1', valor:14000, etapa:'nuevo',       fechaLimite:'2026-07-10', proximaAccion:'Enviar propuesta ampliada',    notas:'Segunda oportunidad con Ana.', creadoEn:ago(3), actualizadoEn:ago(1)  },
+    { id:'d1', titulo:'Landing Page Pro',         contactoId:'c1', valor:8000,  etapa:'propuesta_env', fechaLimite:'2026-06-20', proximaAccion:'Enviar contrato firmado',      notas:'',                           creadoEn:ago(14), actualizadoEn:ago(2)  },
+    { id:'d2', titulo:'Cotizador Digital Pro',    contactoId:'c2', valor:5500,  etapa:'diag_agendado', fechaLimite:'2026-06-10', proximaAccion:'Demo miércoles 10am',           notas:'',                           creadoEn:ago(18), actualizadoEn:ago(5)  },
+    { id:'d3', titulo:'Bundle Vende Más (B2)',    contactoId:'c3', valor:17200, etapa:'negociacion',   fechaLimite:'2026-06-08', proximaAccion:'Revisar términos de pago',      notas:'Quiere pago en 2 parcialidades.', creadoEn:ago(9),  actualizadoEn:ago(1)  },
+    { id:'d4', titulo:'Landing Page Básica',      contactoId:'c4', valor:4500,  etapa:'prospecto_id',  fechaLimite:'2026-07-01', proximaAccion:'Enviar mensaje personalizado',  notas:'',                           creadoEn:ago(7),  actualizadoEn:ago(3)  },
+    { id:'d5', titulo:'NODE CRM P6',              contactoId:'c5', valor:12500, etapa:'contacto_env',  fechaLimite:'2026-06-25', proximaAccion:'Agendar diagnóstico',           notas:'',                           creadoEn:ago(28), actualizadoEn:ago(6)  },
+    { id:'d6', titulo:'Facturador CFDI Básico',   contactoId:'c6', valor:6500,  etapa:'onboarding',    fechaLimite:'2026-05-30', proximaAccion:'D+3: ofrecer mantenimiento R1', notas:'Anticipo 50% recibido.',    creadoEn:ago(38), actualizadoEn:ago(2)  },
+    { id:'d7', titulo:'Landing Page Pro',         contactoId:'c7', valor:8000,  etapa:'perdido',       fechaLimite:'2026-05-15', proximaAccion:'—',                            notas:'Eligió agencia local más barata.', creadoEn:ago(23), actualizadoEn:ago(10) },
+    { id:'d8', titulo:'Bundle STARTER (B1)',      contactoId:'c8', valor:8500,  etapa:'propuesta_env', fechaLimite:'2026-06-18', proximaAccion:'Follow-up mañana temprano',    notas:'',                           creadoEn:ago(11), actualizadoEn:ago(4)  },
+    { id:'d9', titulo:'Cotizador + Landing Pro',  contactoId:'c1', valor:14000, etapa:'conv_activa',   fechaLimite:'2026-07-10', proximaAccion:'Agendar diagnóstico esta semana', notas:'Segunda oportunidad con Ana.', creadoEn:ago(3), actualizadoEn:ago(1)  },
+    { id:'d10',titulo:'Mantenimiento Anual',      contactoId:'c6', valor:14400, etapa:'mantenimiento', fechaLimite:'2027-05-30', proximaAccion:'Renovar en 30 días',           notas:'R2 activo desde junio.',     creadoEn:ago(35), actualizadoEn:ago(0)  },
+    { id:'d11',titulo:'Bundle PRO Upsell',        contactoId:'c3', valor:14500, etapa:'upsell',        fechaLimite:'2026-07-15', proximaAccion:'Proponer bundle PRO en llamada', notas:'NPS 9. Lista para crecer.', creadoEn:ago(5),  actualizadoEn:ago(0)  },
+    { id:'d12',titulo:'Opor. Calificada — POS',   contactoId:'c2', valor:9500,  etapa:'opor_cal',      fechaLimite:'2026-06-30', proximaAccion:'Enviar propuesta P7 + POS',    notas:'MEDDIC 5/6.',               creadoEn:ago(4),  actualizadoEn:ago(1)  },
   ];
 
   S.actividades = [
@@ -198,8 +405,7 @@ function dashboard() {
   const active      = S.deals.filter(d => d.etapa !== 'ganado' && d.etapa !== 'perdido');
   const pipeValue   = active.reduce((s, d) => s + (d.valor || 0), 0);
   const thisMonth   = new Date().getMonth();
-  const wonMonth    = S.deals.filter(d => d.etapa === 'ganado' && new Date(d.actualizadoEn).getMonth() === thisMonth).length;
-  const weekAgo     = Date.now() - 7 * 86_400_000;
+  const wonMonth    = S.deals.filter(d => d.etapa === 'ganado' && new Date(d.actualizadoEn).getMonth() === thisMonth).length;  const weekAgo     = Date.now() - 7 * 86_400_000;
   const actsWeek    = S.actividades.filter(a => a.creadoEn >= weekAgo).length;
 
   const recentActs  = [...S.actividades].sort((a,b) => b.creadoEn - a.creadoEn).slice(0, 5);
@@ -290,7 +496,7 @@ function miniDealHTML(d) {
 }
 
 function buildCharts() {
-  // Bar chart — pipeline value by stage
+  // Bar chart — pipeline value by stage (active pipeline: not ganado/perdido)
   const barEl = document.getElementById('chart-bar');
   if (barEl) {
     const active = ETAPAS.filter(e => e.id !== 'ganado' && e.id !== 'perdido');
@@ -299,14 +505,14 @@ function buildCharts() {
       type: 'bar',
       data: {
         labels: active.map(e => `${e.emoji} ${e.label}`),
-        datasets: [{ data:vals, backgroundColor:active.map(e=>e.bg), borderColor:active.map(e=>e.color), borderWidth:2, borderRadius:8 }]
+        datasets: [{ data:vals, backgroundColor:active.map(e=>e.bg), borderColor:active.map(e=>e.color), borderWidth:2, borderRadius:6 }]
       },
       options: {
         indexAxis:'y', responsive:true, maintainAspectRatio:false,
         plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: ctx => ' '+fmtMXN(ctx.raw) } } },
         scales:{
           x:{ grid:{ color:'#E4E8F0' }, ticks:{ callback:v=>fmtMXN(v), font:{family:'Space Grotesk, system-ui',size:10} } },
-          y:{ grid:{ display:false }, ticks:{ font:{family:'Space Grotesk, system-ui',size:11} } },
+          y:{ grid:{ display:false }, ticks:{ font:{family:'Space Grotesk, system-ui',size:10} } },
         }
       }
     });
@@ -340,39 +546,89 @@ function buildCharts() {
 /* ── 8. PIPELINE KANBAN ─────────────────────────────────────── */
 
 function pipeline() {
-  const totalActive = S.deals.filter(d => d.etapa !== 'ganado' && d.etapa !== 'perdido').reduce((s,d) => s+d.valor, 0);
+  const nonClosedIds  = ['ganado','perdido'];
+  const totalActive   = S.deals.filter(d => !nonClosedIds.includes(d.etapa)).reduce((s,d) => s+(d.valor||0), 0);
+  const totalGanado   = S.deals.filter(d => d.etapa === 'ganado').reduce((s,d) => s+(d.valor||0), 0);
+  const totalDeals    = S.deals.filter(d => !nonClosedIds.includes(d.etapa)).length;
 
   let html = `
   <div class="pipeline-header">
-    <span style="font-size:13px;color:var(--n-500)">Pipeline activo: <strong style="color:var(--indigo)">${fmtMXN(totalActive)}</strong></span>
+    <div class="pipeline-stats">
+      <span class="pipe-stat">
+        <span class="pipe-stat-label">Pipeline activo</span>
+        <strong class="pipe-stat-val indigo">${fmtMXN(totalActive)}</strong>
+      </span>
+      <span class="pipe-stat-sep"></span>
+      <span class="pipe-stat">
+        <span class="pipe-stat-label">Deals activos</span>
+        <strong class="pipe-stat-val teal">${totalDeals}</strong>
+      </span>
+      <span class="pipe-stat-sep"></span>
+      <span class="pipe-stat">
+        <span class="pipe-stat-label">Ganado total</span>
+        <strong class="pipe-stat-val green">${fmtMXN(totalGanado)}</strong>
+      </span>
+    </div>
     <button class="btn btn-primary" onclick="openDealModal()">
-      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       Nuevo deal
     </button>
   </div>
-  <div class="pipeline-wrap">`;
 
-  ETAPAS.forEach(e => {
-    const deals    = dealsByEtapa(e.id);
-    const colValue = deals.reduce((s,d) => s+(d.valor||0), 0);
+  <div class="pipeline-phases-container">`;
+
+  FASES.forEach(fase => {
+    const faseEtapas = ETAPAS.filter(e => e.fase === fase.id);
+    const faseDeals  = S.deals.filter(d => faseEtapas.some(e => e.id === d.etapa));
+    const faseValue  = faseDeals.reduce((s,d) => s+(d.valor||0), 0);
+
     html += `
-    <div class="kanban-col">
-      <div class="kanban-head" style="background:${e.bg};color:${e.tc}">
-        <span>${e.emoji} ${e.label}</span>
-        <span class="col-count">${deals.length}</span>
+    <div class="fase-group">
+      <div class="fase-header" style="background:${fase.bg}">
+        <div class="fase-header-left">
+          <span class="fase-num" style="background:${fase.color}">F${fase.n}</span>
+          <div>
+            <div class="fase-title" style="color:${fase.tc}">${fase.label}</div>
+            <div class="fase-desc" style="color:${fase.tc}aa">${fase.desc}</div>
+          </div>
+        </div>
+        <div class="fase-header-right">
+          <span class="fase-badge" style="background:${fase.color}1a;color:${fase.tc}">${faseDeals.length} deal${faseDeals.length !== 1 ? 's' : ''}</span>
+          ${faseValue > 0 ? `<span class="fase-badge" style="background:${fase.color}1a;color:${fase.tc}">${fmtMXN(faseValue)}</span>` : ''}
+        </div>
       </div>
-      ${colValue > 0 ? `<div style="font-size:11px;color:var(--n-500);padding:2px 6px 4px;font-weight:600">${fmtMXN(colValue)}</div>` : ''}
-      <div class="kanban-cards" data-etapa="${e.id}">
-        ${deals.map(d => dealCardHTML(d)).join('')}
+      <div class="fase-cols">`;
+
+    faseEtapas.forEach(e => {
+      const deals    = dealsByEtapa(e.id);
+      const colValue = deals.reduce((s,d) => s+(d.valor||0), 0);
+      html += `
+        <div class="kanban-col">
+          <div class="kanban-head" style="background:${e.bg};color:${e.tc}">
+            <span>${e.emoji} ${e.label}</span>
+            <span class="col-count">${deals.length}</span>
+          </div>
+          <div class="kanban-gate-chip" title="Gate de entrada: ${e.gate}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+            ${e.gate}
+          </div>
+          ${colValue > 0 ? `<div class="col-value-row" style="color:${e.tc}">${fmtMXN(colValue)}</div>` : ''}
+          <div class="kanban-cards" data-etapa="${e.id}">
+            ${deals.map(d => dealCardHTML(d)).join('')}
+          </div>
+          <button class="kanban-add" onclick="openDealModal(null,'${e.id}')">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Añadir deal
+          </button>
+        </div>`;
+    });
+
+    html += `
       </div>
-      <button class="kanban-add" onclick="openDealModal(null,'${e.id}')">
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Añadir deal
-      </button>
     </div>`;
   });
 
-  html += '</div>';
+  html += `</div>`;
   document.getElementById('content').innerHTML = html;
   initKanbanSortable();
 }
@@ -380,12 +636,43 @@ function pipeline() {
 function dealCardHTML(d) {
   const c    = getContacto(d.contactoId);
   const over = isOverdue(d.fechaLimite) && d.etapa !== 'ganado' && d.etapa !== 'perdido';
-  return `<div class="deal-card" data-id="${d.id}" ondblclick="openDealModal('${d.id}')">
+  const isOnboarding = d.etapa === 'onboarding';
+
+  let onboardingHTML = '';
+  if (isOnboarding) {
+    const MS_DAY     = 86_400_000;
+    const daysSince  = Math.floor((Date.now() - (d.actualizadoEn || d.creadoEn)) / MS_DAY);
+    const progress   = Math.min(daysSince, 14);
+    const pct        = Math.round((progress / 14) * 100);
+    const milestones = [
+      { d:0,  l:'D0',   desc:'Videollamada 45 min · entrega en vivo' },
+      { d:1,  l:'D+1',  desc:'WhatsApp: ¿cómo le fue con su primer cliente?' },
+      { d:3,  l:'D+3',  desc:'Ofrecer plan R1 o R2 con contexto del producto' },
+      { d:7,  l:'D+7',  desc:'NPS 1-10 · si ≥8 pedir testimonio + referido' },
+      { d:14, l:'D+14', desc:'Revisión 30 min · ¿qué resultado has visto?' },
+    ];
+    onboardingHTML = `
+    <div class="onboarding-tracker">
+      <div class="ob-top">
+        <span class="ob-label">Plan 14 días</span>
+        <span class="ob-day">D+${progress}</span>
+      </div>
+      <div class="ob-bar-wrap">
+        <div class="ob-bar" style="width:${pct}%"></div>
+      </div>
+      <div class="ob-milestones">
+        ${milestones.map(m => `<span class="ob-dot ${progress >= m.d ? 'done' : ''}" title="${m.desc}">${m.l}</span>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  return `<div class="deal-card${isOnboarding ? ' deal-onboarding' : ''}" data-id="${d.id}" ondblclick="openDealModal('${d.id}')">
     <div class="deal-title">${escapeHTML(d.titulo)}</div>
     ${c ? `<div class="deal-contact-chip">
       <div class="mini-avatar">${initials(c.nombre)}</div>${escapeHTML(c.nombre)}
     </div>` : ''}
     <div class="deal-value">${fmtMXN(d.valor)}</div>
+    ${onboardingHTML}
     <div class="deal-footer">
       <div class="deal-next">${d.proximaAccion ? '→ '+escapeHTML(d.proximaAccion) : ''}</div>
       ${d.fechaLimite ? `<div class="deal-date${over?' overdue':''}">${over?'⚠️ ':''}${fmtDate(d.fechaLimite)}</div>` : ''}
@@ -586,15 +873,27 @@ function configuracion() {
         <div><button class="btn btn-primary" onclick="saveConfig()">Guardar cambios</button></div>
       </div>
 
-      <div class="config-section-title" style="margin-top:24px">Pipeline — etapas configuradas</div>
+      <div class="config-section-title" style="margin-top:24px">Pipeline — 3 fases · 14 etapas</div>
       <div class="card">
-        <div style="display:flex;flex-direction:column;gap:6px">
-          ${ETAPAS.map(e => `
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:${e.bg};border-radius:8px">
-            <span>${e.emoji}</span>
-            <span style="font-size:13px;font-weight:600;color:${e.tc};flex:1">${e.label}</span>
-            <span class="badge badge-neutral" style="font-size:10px">${dealsByEtapa(e.id).length} deals</span>
-          </div>`).join('')}
+        <div style="display:flex;flex-direction:column;gap:12px">
+          ${FASES.map(fase => {
+            const faseEtapas = ETAPAS.filter(e => e.fase === fase.id);
+            return `
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:${fase.bg};border-radius:8px;margin-bottom:4px">
+                <span class="fase-num" style="background:${fase.color};font-size:10px;width:20px;height:20px">F${fase.n}</span>
+                <span style="font-size:12px;font-weight:700;color:${fase.tc};text-transform:uppercase;letter-spacing:.05em">${fase.label}</span>
+                <span style="font-size:11px;color:${fase.tc}88;margin-left:4px">${fase.desc}</span>
+              </div>
+              ${faseEtapas.map(e => `
+              <div style="display:flex;align-items:center;gap:10px;padding:6px 10px 6px 20px;background:${e.bg};border-radius:6px;margin-bottom:3px">
+                <span>${e.emoji}</span>
+                <span style="font-size:12px;font-weight:600;color:${e.tc};flex:1">${e.label}</span>
+                <span style="font-size:10px;color:${e.tc}88;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.gate}">${e.gate}</span>
+                <span class="badge badge-neutral" style="font-size:10px">${dealsByEtapa(e.id).length} deals</span>
+              </div>`).join('')}
+            </div>`;
+          }).join('')}
         </div>
         <p style="font-size:12px;color:var(--n-400);margin-top:10px">Edición visual de etapas disponible en Fase 2.</p>
       </div>
@@ -727,7 +1026,7 @@ function openDealModal(id = null, etapaDefault = null) {
     S.contactos.map(c => `<option value="${c.id}"${d?.contactoId===c.id?' selected':''}>${escapeHTML(c.nombre)}</option>`).join('');
 
   document.getElementById('d-etapa').innerHTML =
-    ETAPAS.map(e => `<option value="${e.id}"${(d?.etapa||etapaDefault||'nuevo')===e.id?' selected':''}>${e.emoji} ${e.label}</option>`).join('');
+    ETAPAS.map(e => `<option value="${e.id}"${(d?.etapa||etapaDefault||'prospecto_id')===e.id?' selected':''}>${e.emoji} ${e.label}</option>`).join('');
 
   document.getElementById('modal-deal-title').textContent = d ? 'Editar Deal' : 'Nuevo Deal';
   document.getElementById('deal-id').value     = d?.id            || '';
@@ -1048,6 +1347,8 @@ function toast(title, msg='', type='success') {
 /* ── 22. WIRING ────────────────────────────────────────────── */
 
 function wireUpButtons() {
+  // Cierre de sesión
+  document.getElementById('btn-logout')?.addEventListener('click', logout);
   // Sidebar nav
   document.querySelectorAll('.nav-item[data-view]').forEach(btn => {
     btn.addEventListener('click', () => navigate(btn.dataset.view));
@@ -1093,19 +1394,37 @@ function wireUpButtons() {
 /* ── 23. INIT ──────────────────────────────────────────────── */
 
 function init() {
+
+  setupLoginScreen();
+
   const hasData = loadState();
-  if (!hasData) seedData();
 
-  // Hydrate sidebar user
-  document.getElementById('sidebar-user-name').textContent = S.config.usuario;
-  document.getElementById('sidebar-avatar').textContent    = initials(S.config.usuario);
-
-  wireUpButtons();
-  setupSearch();
-  setupQuickMenu();
-  setupKeyboard();
-
+  if (!hasData) {
+    seedData();
+  }
   navigate('dashboard');
+  
+
+  // Restaurar sesión
+  if (restoreSession()) {
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+
+    applyRole();
+
+    wireUpButtons();
+    setupSearch();
+    setupQuickMenu();
+    setupKeyboard();
+
+    navigate('dashboard');
+
+  } else {
+
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('app').classList.add('hidden');
+
+  }
 }
 
 document.addEventListener('DOMContentLoaded', init);
