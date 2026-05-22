@@ -550,7 +550,7 @@ select.input { appearance: none; background-image: url("data:image/svg+xml,%3Csv
 }
 .panel-title  { font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: var(--sp-4); }
 
-/* ── 15. PIPELINE KANBAN ── */
+/* ── 15. PIPELINE KANBAN — 3 Fases · 14 Etapas ── */
 .pipeline-header {
   display: flex;
   align-items: center;
@@ -559,47 +559,199 @@ select.input { appearance: none; background-image: url("data:image/svg+xml,%3Csv
   flex-wrap: wrap;
   gap: var(--sp-3);
 }
-.pipeline-wrap {
+
+/* Pipeline stats row */
+.pipeline-stats {
   display: flex;
+  align-items: center;
   gap: var(--sp-4);
-  overflow-x: auto;
-  padding-bottom: var(--sp-4);
-  min-height: calc(100vh - var(--topbar-h) - 140px);
+  flex-wrap: wrap;
 }
+.pipe-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pipe-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--n-400);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.pipe-stat-val {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  font-family: var(--font-mono);
+}
+.pipe-stat-val.indigo { color: var(--indigo); }
+.pipe-stat-val.teal   { color: var(--teal); }
+.pipe-stat-val.green  { color: var(--success); }
+.pipe-stat-sep {
+  width: 1px;
+  height: 32px;
+  background: var(--n-200);
+  flex-shrink: 0;
+}
+
+/* ── Phases container ── */
+.pipeline-phases-container {
+  display: flex;
+  gap: var(--sp-6);
+  overflow-x: auto;
+  padding-bottom: var(--sp-6);
+  min-height: calc(100vh - var(--topbar-h) - 160px);
+  align-items: flex-start;
+  scrollbar-width: thin;
+  scrollbar-color: var(--n-200) transparent;
+}
+.pipeline-phases-container::-webkit-scrollbar      { height: 6px; }
+.pipeline-phases-container::-webkit-scrollbar-track { background: transparent; }
+.pipeline-phases-container::-webkit-scrollbar-thumb { background: var(--n-200); border-radius: 3px; }
+
+/* ── Fase group (column of header + kanban cols) ── */
+.fase-group {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 0;
+}
+
+/* ── Fase header ── */
+.fase-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px var(--sp-4);
+  border-radius: var(--r-base) var(--r-base) 0 0;
+  min-height: 56px;
+  gap: var(--sp-3);
+}
+.fase-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.fase-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+.fase-num {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+.fase-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+.fase-desc {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.3;
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fase-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  white-space: nowrap;
+}
+
+/* ── Fase columns container ── */
+.fase-cols {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-3) 0;
+  background: var(--n-50);
+  border-radius: 0 0 var(--r-base) var(--r-base);
+  min-height: calc(100vh - var(--topbar-h) - 230px);
+  align-items: flex-start;
+}
+
+/* ── Kanban column (inside fase-cols) ── */
 .kanban-col {
-  min-width: 240px;
-  max-width: 240px;
+  min-width: 220px;
+  max-width: 220px;
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
 }
 .kanban-head {
-  padding: 10px var(--sp-3);
+  padding: 8px var(--sp-3);
   border-radius: var(--r-base);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 .kanban-head .col-count {
-  font-size: 11px;
+  font-size: 10px;
   background: rgba(0,0,0,.08);
   border-radius: var(--r-full);
-  padding: 1px 7px;
+  padding: 1px 6px;
+  font-weight: 700;
 }
+
+/* Gate chip under column header */
+.kanban-gate-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--n-400);
+  padding: 3px var(--sp-2);
+  background: transparent;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+  transition: color var(--t-fast);
+  line-height: 1.3;
+}
+.kanban-gate-chip:hover { color: var(--n-600); }
+.kanban-gate-chip svg   { flex-shrink: 0; opacity: .6; }
+
+/* Column value row */
+.col-value-row {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0 var(--sp-2) 2px;
+  font-family: var(--font-mono);
+}
+
 .kanban-cards {
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
-  min-height: 64px;
+  min-height: 60px;
   border-radius: var(--r-base);
   padding: var(--sp-1);
   transition: background var(--t-base) var(--ease);
 }
 .kanban-cards.sortable-over { background: var(--indigo-50); }
 
+/* ── Deal card ── */
 .deal-card {
   background: var(--n-0);
   border: 1px solid var(--n-200);
@@ -610,39 +762,99 @@ select.input { appearance: none; background-image: url("data:image/svg+xml,%3Csv
   box-shadow: var(--sh-xs);
 }
 .deal-card:hover { box-shadow: var(--sh-md); border-color: var(--indigo-200); transform: translateY(-1px); }
-.deal-card.sortable-ghost { opacity: .4; }
+.deal-card.sortable-ghost  { opacity: .4; }
 .deal-card.sortable-chosen { cursor: grabbing; box-shadow: var(--sh-lg); }
 
-.deal-title { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 5px; line-height: 1.3; }
+/* Onboarding deal card special accent */
+.deal-card.deal-onboarding {
+  border-top: 2px solid var(--teal);
+}
+
+.deal-title { font-size: 12px; font-weight: 600; color: var(--ink); margin-bottom: 4px; line-height: 1.3; }
 .deal-contact-chip {
-  display: flex; align-items: center; gap: 5px;
-  font-size: 11px; color: var(--n-500); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 4px;
+  font-size: 10px; color: var(--n-500); margin-bottom: 6px;
 }
 .deal-contact-chip .mini-avatar {
-  width: 18px; height: 18px; border-radius: 50%;
+  width: 16px; height: 16px; border-radius: 50%;
   background: var(--indigo-100); color: var(--indigo);
-  font-size: 9px; font-weight: 700;
+  font-size: 8px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
-.deal-value { font-size: 15px; font-weight: 700; color: var(--indigo); }
+.deal-value { font-size: 14px; font-weight: 700; color: var(--indigo); margin-bottom: 2px; }
 .deal-footer {
   display: flex; align-items: center; justify-content: space-between;
-  margin-top: 8px; padding-top: 8px;
+  margin-top: 6px; padding-top: 6px;
   border-top: 1px solid var(--n-100);
 }
-.deal-next { font-size: 10px; color: var(--n-500); max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.deal-next { font-size: 10px; color: var(--n-500); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .deal-date { font-size: 10px; color: var(--n-400); }
 .deal-date.overdue { color: var(--error); font-weight: 600; }
+
+/* ── Onboarding tracker (14-day plan) ── */
+.onboarding-tracker {
+  margin: 6px 0 4px;
+  padding: 7px 8px;
+  background: var(--teal-50);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--teal-100);
+}
+.ob-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+.ob-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--teal-700);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.ob-day {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--teal);
+  font-family: var(--font-mono);
+}
+.ob-bar-wrap {
+  height: 4px;
+  background: var(--teal-100);
+  border-radius: 2px;
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+.ob-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--teal), #06EDD8);
+  border-radius: 2px;
+  transition: width .6s var(--ease-out);
+  min-width: 4px;
+}
+.ob-milestones {
+  display: flex;
+  justify-content: space-between;
+}
+.ob-dot {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--n-400);
+  cursor: default;
+  transition: color var(--t-fast);
+}
+.ob-dot.done { color: var(--teal-700); }
+.ob-dot:hover { color: var(--teal); }
 
 .kanban-add {
   margin-top: var(--sp-1);
   width: 100%;
-  padding: 8px;
+  padding: 7px;
   background: transparent;
   border: 1.5px dashed var(--n-200);
   border-radius: var(--r-base);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--n-400);
   cursor: pointer;
   transition: all var(--t-base) var(--ease);
@@ -1220,4 +1432,316 @@ select.input { appearance: none; background-image: url("data:image/svg+xml,%3Csv
   .stats-grid { grid-template-columns: 1fr 1fr; }
   .contacts-table thead th:nth-child(3),
   .contacts-table td:nth-child(3) { display: none; }
+}
+
+/* ── 29. PANTALLA DE LOGIN ── */
+
+#login-screen {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(135deg, #EEF2FF 0%, #F0FDFB 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9000;
+  padding: var(--sp-6);
+}
+#login-screen.hidden { display: none; }
+
+/* Background dot pattern */
+.login-bg-dots {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(67,56,202,.07) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+}
+
+.login-card {
+  background: var(--n-0);
+  border: 1px solid var(--n-200);
+  border-radius: var(--r-xl);
+  box-shadow: var(--sh-xl);
+  padding: 40px 44px;
+  width: 100%;
+  max-width: 480px;
+  position: relative;
+  z-index: 1;
+  animation: modalIn 360ms cubic-bezier(0.34,1.26,0.64,1);
+}
+.login-card.shake {
+  animation: shake 420ms cubic-bezier(.36,.07,.19,.97);
+}
+
+/* Brand */
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: 20px;
+}
+.login-logomark {
+  width: 48px; height: 48px;
+  background: var(--indigo);
+  border-radius: var(--r-md);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(67,56,202,.35);
+}
+.login-app-name {
+  font-family: var(--font-disp);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--indigo);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.login-app-tag { font-size: 12px; color: var(--n-500); margin-top: 2px; }
+
+.login-divider {
+  height: 1px;
+  background: var(--n-100);
+  margin: 20px 0;
+}
+
+/* Role selector */
+.login-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--n-500);
+  margin-bottom: 12px;
+}
+
+.login-roles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3);
+  margin-bottom: 24px;
+}
+
+.role-card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 14px var(--sp-4);
+  border-radius: var(--r-md);
+  border: 2px solid var(--n-200);
+  background: var(--n-0);
+  cursor: pointer;
+  transition: all var(--t-base) var(--ease);
+  text-align: left;
+  width: 100%;
+  position: relative;
+}
+.role-card:hover {
+  border-color: var(--indigo-200);
+  background: var(--indigo-50);
+}
+.role-card.active {
+  border-color: var(--indigo);
+  background: var(--indigo-50);
+  box-shadow: var(--sh-accent);
+}
+.role-card-icon { font-size: 22px; flex-shrink: 0; }
+.role-card-name { font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.2; }
+.role-card-desc { font-size: 11px; color: var(--n-500); margin-top: 2px; }
+.role-card-check {
+  position: absolute;
+  top: 8px; right: 8px;
+  width: 20px; height: 20px;
+  border-radius: var(--r-full);
+  background: var(--indigo);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0;
+  transform: scale(.6);
+  transition: all var(--t-base) cubic-bezier(0.34,1.56,0.64,1);
+}
+.role-card.active .role-card-check { opacity: 1; transform: scale(1); }
+
+/* Password field */
+.login-pwd-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.login-pwd-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--n-400);
+  pointer-events: none;
+}
+.login-pwd-input {
+  padding-left: 42px !important;
+  padding-right: 46px !important;
+  height: 46px;
+  font-size: 15px;
+  letter-spacing: .05em;
+}
+.login-pwd-input:focus { border-color: var(--indigo); box-shadow: var(--sh-focus); }
+.pwd-eye-btn {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: var(--n-400);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  transition: color var(--t-base);
+}
+.pwd-eye-btn:hover { color: var(--ink); }
+
+.login-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--err-dark);
+  background: var(--err-light);
+  border-radius: var(--r-sm);
+  padding: 8px 12px;
+  margin-top: 8px;
+  border: 1px solid #FECACA;
+}
+.login-error.hidden { display: none; }
+
+.login-btn {
+  width: 100%;
+  height: 48px;
+  font-size: 15px;
+  margin-top: 8px;
+  box-shadow: 0 4px 16px rgba(67,56,202,.30);
+}
+.login-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(67,56,202,.35); }
+
+/* Hint box */
+.login-hint-box {
+  margin-top: 24px;
+  padding: 14px 16px;
+  background: var(--n-50);
+  border: 1px solid var(--n-200);
+  border-radius: var(--r-base);
+}
+.login-hint-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--n-500);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 8px;
+}
+.login-hint-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+}
+.login-hint-row + .login-hint-row { border-top: 1px solid var(--n-100); }
+.login-hint-role { font-size: 12px; color: var(--n-600); }
+.login-hint-code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--indigo);
+  background: var(--indigo-50);
+  border: 1px solid var(--indigo-200);
+  border-radius: 5px;
+  padding: 2px 8px;
+}
+
+/* ── 30. ROLE BADGE & LOGOUT ── */
+
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-3);
+  border-top: 1px solid var(--n-100);
+  flex-wrap: nowrap;
+}
+
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: var(--r-full);
+  padding: 2px 8px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.role-admin  { background: var(--indigo-50); color: var(--indigo); border: 1px solid var(--indigo-200); }
+.role-ventas { background: var(--teal-50);   color: var(--teal-700); border: 1px solid var(--teal-100); }
+
+.logout-btn {
+  width: 30px; height: 30px;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--n-400);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  margin-left: auto;
+  transition: all var(--t-base) var(--ease);
+}
+.logout-btn:hover { background: var(--err-light); color: var(--error); }
+
+/* Restricted view overlay */
+.access-denied {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+  text-align: center;
+  color: var(--n-400);
+  gap: var(--sp-4);
+}
+.access-denied-icon {
+  font-size: 48px;
+  width: 80px; height: 80px;
+  background: var(--err-light);
+  border-radius: var(--r-full);
+  display: flex; align-items: center; justify-content: center;
+}
+.access-denied h2 { font-size: 18px; font-weight: 700; color: var(--ink); }
+.access-denied p  { font-size: 14px; color: var(--n-500); max-width: 320px; }
+
+/* ── 31. PASSWORDS CONFIG SECTION ── */
+.pwd-field-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+.pwd-strength {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--n-100);
+  margin-top: 6px;
+  overflow: hidden;
+}
+.pwd-strength-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 300ms var(--ease), background 300ms;
+}
+
+/* ── 32. SHAKE ANIMATION ── */
+@keyframes shake {
+  10%, 90%  { transform: translate3d(-2px,0,0); }
+  20%, 80%  { transform: translate3d(4px,0,0); }
+  30%, 50%, 70% { transform: translate3d(-6px,0,0); }
+  40%, 60%  { transform: translate3d(6px,0,0); }
+}
+
+@media (max-width: 520px) {
+  .login-card { padding: 28px 20px; }
+  .login-roles { grid-template-columns: 1fr; }
+  .pwd-field-group { grid-template-columns: 1fr; }
 }
