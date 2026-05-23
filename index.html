@@ -41,7 +41,7 @@
     <div class="login-divider"></div>
 
     <p class="login-section-label">Selecciona tu rol de acceso</p>
-    <div class="login-roles" role="radiogroup" aria-label="Rol de acceso">
+    <div class="login-roles login-roles-col" role="radiogroup" aria-label="Rol de acceso">
       <button class="role-card active" data-role="admin" role="radio" aria-checked="true">
         <span class="role-card-icon">👑</span>
         <div>
@@ -56,36 +56,23 @@
         <span class="role-card-icon">📈</span>
         <div>
           <div class="role-card-name">Director de Ventas</div>
-          <div class="role-card-desc"> Supervisión · Reportes · KPIs</div>
+          <div class="role-card-desc">Supervisión · Reportes · KPIs</div>
+        </div>
+        <span class="role-card-check" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+        </span>
+      </button>
+      <button class="role-card" data-role="venta" role="radio" aria-checked="false">
+        <span class="role-card-icon">🎯</span>
+        <div>
+          <div class="role-card-name">Venta NODE</div>
+          <div class="role-card-desc">Pipeline · Contactos · Actividades</div>
         </div>
         <span class="role-card-check" aria-hidden="true">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
         </span>
       </button>
     </div>
-    <button class="role-card" data-role="director" role="radio" aria-checked="false">
-  <span class="role-card-icon">🎯</span>
-
-  <div>
-    <div class="role-card-name">Ventas</div>
-    <div class="role-card-desc">
-     Pipeline · Contactos · Actividades
-    </div>
-  </div>
-
-  <span class="role-card-check" aria-hidden="true">
-    <svg xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2.5">
-
-      <path d="M20 6L9 17l-5-5"/>
-    </svg>
-  </span>
-</button>
 
 
     <div class="field" style="margin-bottom:8px">
