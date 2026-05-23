@@ -1310,6 +1310,12 @@ function saveDeal() {
     const i = S.deals.findIndex(d => d.id === id);
     if (i >= 0) S.deals[i] = { ...S.deals[i], ...data };
     toast('Deal actualizado', titulo, 'success');
+
+    saveState(); closeAllModals();
+    if      (S.view === 'pipeline')    pipeline();
+    else if (S.view === 'dashboard')   dashboard();
+    else if (S.view === 'actividades') actividades();
+
   } else {
     // ── Nuevo deal: guardar + registrar actividad automática ──
     const newDealId = 'd' + uid();
@@ -1319,10 +1325,10 @@ function saveDeal() {
     const partes = [
       `Deal creado: "${titulo}"`,
       `Etapa: ${etapaLabel}`,
-      data.valor  ? `Valor: ${fmtMXN(data.valor)}`                  : null,
-      data.fechaLimite   ? `Fecha límite: ${fmtDate(data.fechaLimite)}`     : null,
-      data.proximaAccion ? `Próxima acción: ${data.proximaAccion}`           : null,
-      data.notas         ? `Notas: ${data.notas}`                            : null,
+      data.valor         ? `Valor: ${fmtMXN(data.valor)}`               : null,
+      data.fechaLimite   ? `Fecha límite: ${fmtDate(data.fechaLimite)}` : null,
+      data.proximaAccion ? `Próxima acción: ${data.proximaAccion}`       : null,
+      data.notas         ? `Notas: ${data.notas}`                        : null,
     ].filter(Boolean);
 
     S.actividades.push({
@@ -1339,13 +1345,14 @@ function saveDeal() {
       if (c) c.actualizadoEn = now;
     }
 
+    saveState(); closeAllModals();
+    if      (S.view === 'pipeline')    { pipeline();    setTimeout(() => openDealDrawer(newDealId), 120); }
+    else if (S.view === 'dashboard')   dashboard();
+    else if (S.view === 'actividades') actividades();
+
     toast('Deal creado', titulo, 'success');
   }
 
-  saveState(); closeAllModals();
-  if (S.view === 'pipeline')   pipeline();
-  else if (S.view === 'dashboard') dashboard();
-  
 }
 
 function deleteDeal(id) {
