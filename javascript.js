@@ -1,4 +1,5 @@
 
+
 'use strict';
 
 /* ═══════════════════════════════════════════════════════════════
@@ -942,20 +943,43 @@ function contactos() {
 }
 
 function contactRowHTML(c) {
-  return `<tr onclick="openDetalleModal('${c.id}')" title="Ver detalle de ${escapeHTML(c.nombre)}">
+  // Etapa del deal más reciente del contacto
+  const deals = dealsByContact(c.id)
+    .sort((x, y) => y.actualizadoEn - x.actualizadoEn);
+
+  const dealActivo = deals.find(d => d.etapa !== 'perdido') || deals[0];
+  const etapa  = dealActivo ? getEtapa(dealActivo.etapa) : null;
+  const rowBg  = etapa ? etapa.bg    : 'transparent';
+  const rowTc  = etapa ? etapa.tc    : 'var(--n-600)';
+
+  // Badge de etapa para la columna Fuente
+  const etapaBadge = etapa
+    ? `<span class="badge"
+         style="background:${etapa.bg};color:${etapa.tc};
+                border:1px solid ${etapa.color}33;margin-left:6px">
+         ${etapa.emoji} ${etapa.label}
+       </span>`
+    : '';
+
+  return `<tr onclick="openDetalleModal('${c.id}')"
+    title="Ver detalle de ${escapeHTML(c.nombre)}"
+    style="background:${rowBg}">
     <td><div class="contact-row-name">
-      <div class="contact-avatar">${initials(c.nombre)}</div>
+      <div class="contact-avatar"
+        style="background:${etapa?.color||'var(--indigo)'}">${initials(c.nombre)}</div>
       <div>
         <div class="contact-name">${escapeHTML(c.nombre)}</div>
         <div class="contact-email">${escapeHTML(c.email||'—')}</div>
       </div>
     </div></td>
     <td style="font-size:13px;color:var(--n-600)">${escapeHTML(c.empresa||'—')}</td>
-    <td><span class="badge badge-indigo">${escapeHTML(c.fuente)}</span></td>
+    <td><span class="badge badge-indigo">${escapeHTML(c.fuente)}</span>${etapaBadge}</td>
     <td class="money" style="font-size:13px">${fmtMXN(c.monto)}</td>
     <td style="font-size:12px;color:var(--n-500)">${timeAgo(c.actualizadoEn)}</td>
     <td onclick="event.stopPropagation()"><div class="table-actions">
-      <a href="https://wa.me/52${c.whatsapp}?text=Hola%20${encodeURIComponent(c.nombre)}%2C%20te%20contacto%20de%20NODE." target="_blank" rel="noopener noreferrer" class="contact-wa-btn" title="Abrir WhatsApp">💬</a>
+      <a href="https://wa.me/52${c.whatsapp}?text=Hola%20${encodeURIComponent(c.nombre)}%2C%20te%20contacto%20de%20NODE."
+        target="_blank" rel="noopener noreferrer"
+        class="contact-wa-btn" title="Abrir WhatsApp">💬</a>
       <button class="icon-btn" onclick="openContactoModal('${c.id}')" title="Editar">
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
       </button>
@@ -1000,49 +1024,18 @@ function actividades() {
 
 function actItemHTML(a) {
   const c = getContacto(a.contactoId);
-
-  // ── Etapa actual del contacto (deal más reciente activo, o cualquier deal) ──
-  const dealsDelContacto = dealsByContact(a.contactoId)
-    .sort((x, y) => y.actualizadoEn - x.actualizadoEn);
-
-  const dealActivo = dealsDelContacto.find(
-    d => d.etapa !== 'perdido'
-  ) || dealsDelContacto[0];
-
-  const etapa   = dealActivo ? getEtapa(dealActivo.etapa) : null;
-  const cardBg  = etapa ? etapa.bg    : '#FFFFFF';
-  const cardBdr = etapa ? etapa.color : 'var(--n-200)';
-
-  // Badge de etapa (solo si existe deal)
-  const etapaBadge = etapa
-    ? `<span class="act-etapa-badge"
-         style="background:${etapa.bg};color:${etapa.tc};
-                border-color:${etapa.color}33">
-         ${etapa.emoji} ${etapa.label}
-       </span>`
-    : '';
-
-  return `<div class="activity-item"
-    style="background:${cardBg};border-color:${cardBdr}22">
-    <div class="act-icon"
-      style="background:${ACT_BG[a.tipo]||'#f8f9fb'}">
-      ${ACT_ICONS[a.tipo]||'📌'}
-    </div>
+  return `<div class="activity-item">
+    <div class="act-icon" style="background:${ACT_BG[a.tipo]||'#f8f9fb'}">${ACT_ICONS[a.tipo]||'📌'}</div>
     <div class="act-body">
       <div class="act-meta">
         <span class="act-contact">${escapeHTML(c?.nombre||'Contacto eliminado')}</span>
         <span class="act-type">${ACT_LABELS[a.tipo]||a.tipo}</span>
-        ${etapaBadge}
         <span class="act-time">${timeAgo(a.creadoEn)}</span>
       </div>
       <p class="act-desc">${escapeHTML(a.descripcion)}</p>
     </div>
     <button class="icon-btn danger" onclick="deleteActividad('${a.id}')" title="Eliminar">
-      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13"
-        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <polyline points="3 6 5 6 21 6"/>
-        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-      </svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
     </button>
   </div>`;
 }
