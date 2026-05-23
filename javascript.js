@@ -1306,11 +1306,39 @@ function saveDeal() {
   }
 
   if (id) {
+    // ── Edición: actualizar deal ──────────────────────────────
     const i = S.deals.findIndex(d => d.id === id);
     if (i >= 0) S.deals[i] = { ...S.deals[i], ...data };
     toast('Deal actualizado', titulo, 'success');
   } else {
-    S.deals.push({ id:'d'+uid(), creadoEn:now, ...data });
+    // ── Nuevo deal: guardar + registrar actividad automática ──
+    const newDealId = 'd' + uid();
+    S.deals.push({ id: newDealId, creadoEn: now, ...data });
+
+    const etapaLabel = getEtapa(data.etapa).label;
+    const partes = [
+      `Deal creado: "${titulo}"`,
+      `Etapa: ${etapaLabel}`,
+      data.valor  ? `Valor: ${fmtMXN(data.valor)}`                  : null,
+      data.fechaLimite   ? `Fecha límite: ${fmtDate(data.fechaLimite)}`     : null,
+      data.proximaAccion ? `Próxima acción: ${data.proximaAccion}`           : null,
+      data.notas         ? `Notas: ${data.notas}`                            : null,
+    ].filter(Boolean);
+
+    S.actividades.push({
+      id:          'a' + uid(),
+      tipo:        'nota',
+      contactoId:  contactoId || null,
+      descripcion: partes.join(' · '),
+      creadoEn:    now,
+    });
+
+    // Actualizar timestamp del contacto
+    if (contactoId) {
+      const c = S.contactos.find(x => x.id === contactoId);
+      if (c) c.actualizadoEn = now;
+    }
+
     toast('Deal creado', titulo, 'success');
   }
 
