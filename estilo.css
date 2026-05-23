@@ -1462,23 +1462,10 @@ select.input {
   }
 
   /* Ocultar elementos que no pertenecen al bottom nav */
-.sidebar-logo,
-.sidebar-divider        { display: none; }
+  .sidebar-logo,
+  .sidebar-bottom,
+  .sidebar-divider   { display: none; }
 
-/* Ocultar solo atajos y usuario dentro de sidebar-bottom */
-#btn-shortcuts,
-.sidebar-user           { display: none; }
-
-/* sidebar-bottom se comporta igual que sidebar-nav en el bottom bar */
-.sidebar-bottom {
-  flex-direction: row;
-  padding: 0;
-  gap: 0;
-  justify-content: space-around;
-  align-items: stretch;
-  border: none;
-  flex: 0 0 auto;   /* no crecer, pero sí estar presente */
-}
   /* Nav: fila horizontal */
   .sidebar-nav {
     flex-direction: row;
