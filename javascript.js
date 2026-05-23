@@ -1,5 +1,4 @@
 
-
 'use strict';
 
 /* ═══════════════════════════════════════════════════════════════
@@ -83,6 +82,7 @@ function login() {
 setupSearch();
 setupQuickMenu();
 setupKeyboard();
+setupClock();
 
 // Navegar a la primera vista permitida del rol (venta no tiene dashboard)
   const firstView = ROLE_VIEWS[AUTH.role]?.[0] || 'pipeline';
@@ -824,14 +824,21 @@ function pipeline() {
 function dealCardHTML(d) {
   const c    = getContacto(d.contactoId);
   const over = isOverdue(d.fechaLimite) && d.etapa !== 'ganado' && d.etapa !== 'perdido';
-  const isOnboarding = d.etapa === 'onboarding';
 
-  let onboardingHTML = '';
-  if (isOnboarding) {
-    const MS_DAY     = 86_400_000;
-    const daysSince  = Math.floor((Date.now() - (d.actualizadoEn || d.creadoEn)) / MS_DAY);
-    const progress   = Math.min(daysSince, 14);
-    const pct        = Math.round((progress / 14) * 100);
+  // Tracker aparece en onboarding Y en ganado
+  const ETAPAS_CON_TRACKER = ['onboarding', 'ganado'];
+  const tieneTracker = ETAPAS_CON_TRACKER.includes(d.etapa);
+
+  let trackerHTML = '';
+  if (tieneTracker) {
+    const MS_DAY = 86_400_000;
+
+    // Usar onboardingStartedAt si existe, si no actualizadoEn, si no creadoEn
+    const inicio  = d.onboardingStartedAt || d.actualizadoEn || d.creadoEn;
+    const daysSince = Math.floor((Date.now() - inicio) / MS_DAY);
+    const progress  = Math.min(daysSince, 14);
+    const pct       = Math.round((progress / 14) * 100);
+
     const milestones = [
       { d:0,  l:'D0',   desc:'Videollamada 45 min · entrega en vivo' },
       { d:1,  l:'D+1',  desc:'WhatsApp: ¿cómo le fue con su primer cliente?' },
@@ -839,28 +846,37 @@ function dealCardHTML(d) {
       { d:7,  l:'D+7',  desc:'NPS 1-10 · si ≥8 pedir testimonio + referido' },
       { d:14, l:'D+14', desc:'Revisión 30 min · ¿qué resultado has visto?' },
     ];
-    onboardingHTML = `
+
+    // Color según etapa
+    const trackerColor = d.etapa === 'ganado' ? '#10B981' : '#0D9488';
+
+    trackerHTML = `
     <div class="onboarding-tracker">
       <div class="ob-top">
         <span class="ob-label">Plan 14 días</span>
-        <span class="ob-day">D+${progress}</span>
+        <span class="ob-day" style="color:${trackerColor}">D+${progress}</span>
       </div>
       <div class="ob-bar-wrap">
-        <div class="ob-bar" style="width:${pct}%"></div>
+        <div class="ob-bar" style="width:${pct}%;background:linear-gradient(90deg,${trackerColor},#06EDD8)"></div>
       </div>
       <div class="ob-milestones">
-        ${milestones.map(m => `<span class="ob-dot ${progress >= m.d ? 'done' : ''}" title="${m.desc}">${m.l}</span>`).join('')}
+        ${milestones.map(m =>
+          `<span class="ob-dot${progress >= m.d ? ' done' : ''}"
+            style="${progress >= m.d ? `background:${trackerColor};color:#fff` : ''}"
+            title="${m.desc}">${m.l}</span>`
+        ).join('')}
       </div>
     </div>`;
   }
 
-  return `<div class="deal-card${isOnboarding ? ' deal-onboarding' : ''}" data-id="${d.id}" ondblclick="openDealModal('${d.id}')">
+  return `<div class="deal-card${tieneTracker ? ' deal-onboarding' : ''}"
+    data-id="${d.id}" ondblclick="openDealModal('${d.id}')">
     <div class="deal-title">${escapeHTML(d.titulo)}</div>
     ${c ? `<div class="deal-contact-chip">
       <div class="mini-avatar">${initials(c.nombre)}</div>${escapeHTML(c.nombre)}
     </div>` : ''}
     <div class="deal-value">${fmtMXN(d.valor)}</div>
-    ${onboardingHTML}
+    ${trackerHTML}
     <div class="deal-footer">
       <div class="deal-next">${d.proximaAccion ? '→ '+escapeHTML(d.proximaAccion) : ''}</div>
       ${d.fechaLimite ? `<div class="deal-date${over?' overdue':''}">${over?'⚠️ ':''}${fmtDate(d.fechaLimite)}</div>` : ''}
@@ -884,6 +900,13 @@ function initKanbanSortable() {
         if (deal && deal.etapa !== newEtapa) {
           deal.etapa = newEtapa;
           deal.actualizadoEn = Date.now();
+          deal.etapa = newEtapa;
+         deal.actualizadoEn = Date.now();
+
+         // ← AGREGAR: registrar cuándo inició el onboarding
+        if (['ganado','onboarding'].includes(newEtapa) && !deal.onboardingStartedAt) {
+         deal.onboardingStartedAt = Date.now();
+         }
           saveState();
           // Refresh counts
           document.querySelectorAll('.kanban-col').forEach(col => {
@@ -1201,13 +1224,20 @@ function saveContacto() {
     actualizadoEn:now,
   };
 
+  if (['ganado', 'onboarding'].includes(data.etapa)) {
+    const existente = S.deals.find(d => d.id === id);
+    if (!existente?.onboardingStartedAt) {
+      data.onboardingStartedAt = now;
+    }
+  }
+
   if (id) {
-    const i = S.contactos.findIndex(c => c.id === id);
-    if (i >= 0) S.contactos[i] = { ...S.contactos[i], ...data };
-    toast('Actualizado', nombre, 'success');
+    const i = S.deals.findIndex(d => d.id === id);
+    if (i >= 0) S.deals[i] = { ...S.deals[i], ...data };
+    toast('Deal actualizado', titulo, 'success');
   } else {
-    S.contactos.push({ id:'c'+uid(), creadoEn:now, ...data });
-    toast('Contacto creado', nombre, 'success');
+    S.deals.push({ id:'d'+uid(), creadoEn:now, ...data });
+    toast('Deal creado', titulo, 'success');
   }
 
   saveState(); closeAllModals();
@@ -1280,6 +1310,7 @@ function saveDeal() {
   saveState(); closeAllModals();
   if (S.view === 'pipeline')   pipeline();
   else if (S.view === 'dashboard') dashboard();
+  
 }
 
 function deleteDeal(id) {
@@ -1556,6 +1587,30 @@ function toast(title, msg='', type='success') {
 }
 
 /* ── 22. WIRING ────────────────────────────────────────────── */
+/* ── RELOJ EN TIEMPO REAL ── */
+function setupClock() {
+  const DIAS   = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const MESES  = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+  function tick() {
+    const now  = new Date();
+    const hh   = String(now.getHours()).padStart(2,'0');
+    const mm   = String(now.getMinutes()).padStart(2,'0');
+    const ss   = String(now.getSeconds()).padStart(2,'0');
+    const dia  = DIAS[now.getDay()];
+    const fecha= `${dia} ${now.getDate()} ${MESES[now.getMonth()]} ${now.getFullYear()}`;
+
+    const elTime = document.getElementById('clock-time');
+    const elDate = document.getElementById('clock-date');
+    if (elTime) elTime.textContent = `${hh}:${mm}:${ss}`;
+    if (elDate) elDate.textContent = fecha;
+  }
+
+  tick(); // mostrar inmediatamente
+  // Actualizar cada segundo
+  if (window._clockInterval) clearInterval(window._clockInterval);
+  window._clockInterval = setInterval(tick, 1000);
+}
 
 function wireUpButtons() {
   // Cierre de sesión
@@ -1621,6 +1676,7 @@ function init() {
     setupSearch();
     setupQuickMenu();
     setupKeyboard();
+    setupClock();
 
     // Navegar a primera vista permitida del rol restaurado
     const firstView = ROLE_VIEWS[AUTH.role]?.[0] || 'pipeline';
