@@ -1,4 +1,3 @@
-
 'use strict';
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1224,20 +1223,13 @@ function saveContacto() {
     actualizadoEn:now,
   };
 
-  if (['ganado', 'onboarding'].includes(data.etapa)) {
-    const existente = S.deals.find(d => d.id === id);
-    if (!existente?.onboardingStartedAt) {
-      data.onboardingStartedAt = now;
-    }
-  }
-
   if (id) {
-    const i = S.deals.findIndex(d => d.id === id);
-    if (i >= 0) S.deals[i] = { ...S.deals[i], ...data };
-    toast('Deal actualizado', titulo, 'success');
+    const i = S.contactos.findIndex(c => c.id === id);
+    if (i >= 0) S.contactos[i] = { ...S.contactos[i], ...data };
+    toast('Actualizado', nombre, 'success');
   } else {
-    S.deals.push({ id:'d'+uid(), creadoEn:now, ...data });
-    toast('Deal creado', titulo, 'success');
+    S.contactos.push({ id:'c'+uid(), creadoEn:now, ...data });
+    toast('Contacto creado', nombre, 'success');
   }
 
   saveState(); closeAllModals();
@@ -1297,6 +1289,14 @@ function saveDeal() {
     notas:         document.getElementById('d-notas').value.trim(),
     actualizadoEn: now,
   };
+
+  // Registrar inicio de onboarding al guardar desde el modal
+  if (['ganado', 'onboarding'].includes(data.etapa)) {
+    const existente = S.deals.find(d => d.id === id);
+    if (!existente?.onboardingStartedAt) {
+      data.onboardingStartedAt = now;
+    }
+  }
 
   if (id) {
     const i = S.deals.findIndex(d => d.id === id);
