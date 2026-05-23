@@ -1,8 +1,3 @@
-/* ═══════════════════════════════════════════════════════════════
-   NODE CRM P6 — javascript.js
-   Mini-CRM para emprendedores y micronegocios mexicanos
-   Stack: Vanilla JS ES6+ · Chart.js · SortableJS
-   ═══════════════════════════════════════════════════════════════ */
 
 'use strict';
 
@@ -1005,18 +1000,49 @@ function actividades() {
 
 function actItemHTML(a) {
   const c = getContacto(a.contactoId);
-  return `<div class="activity-item">
-    <div class="act-icon" style="background:${ACT_BG[a.tipo]||'#f8f9fb'}">${ACT_ICONS[a.tipo]||'📌'}</div>
+
+  // ── Etapa actual del contacto (deal más reciente activo, o cualquier deal) ──
+  const dealsDelContacto = dealsByContact(a.contactoId)
+    .sort((x, y) => y.actualizadoEn - x.actualizadoEn);
+
+  const dealActivo = dealsDelContacto.find(
+    d => d.etapa !== 'perdido'
+  ) || dealsDelContacto[0];
+
+  const etapa   = dealActivo ? getEtapa(dealActivo.etapa) : null;
+  const cardBg  = etapa ? etapa.bg    : '#FFFFFF';
+  const cardBdr = etapa ? etapa.color : 'var(--n-200)';
+
+  // Badge de etapa (solo si existe deal)
+  const etapaBadge = etapa
+    ? `<span class="act-etapa-badge"
+         style="background:${etapa.bg};color:${etapa.tc};
+                border-color:${etapa.color}33">
+         ${etapa.emoji} ${etapa.label}
+       </span>`
+    : '';
+
+  return `<div class="activity-item"
+    style="background:${cardBg};border-color:${cardBdr}22">
+    <div class="act-icon"
+      style="background:${ACT_BG[a.tipo]||'#f8f9fb'}">
+      ${ACT_ICONS[a.tipo]||'📌'}
+    </div>
     <div class="act-body">
       <div class="act-meta">
         <span class="act-contact">${escapeHTML(c?.nombre||'Contacto eliminado')}</span>
         <span class="act-type">${ACT_LABELS[a.tipo]||a.tipo}</span>
+        ${etapaBadge}
         <span class="act-time">${timeAgo(a.creadoEn)}</span>
       </div>
       <p class="act-desc">${escapeHTML(a.descripcion)}</p>
     </div>
     <button class="icon-btn danger" onclick="deleteActividad('${a.id}')" title="Eliminar">
-      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13"
+        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <polyline points="3 6 5 6 21 6"/>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+      </svg>
     </button>
   </div>`;
 }
