@@ -514,6 +514,30 @@
   </div>
 </div>
 
+<!-- DEAL DRAWER — Panel lateral de actividades del deal -->
+<div id="drawer-backdrop"></div>
+<div id="deal-drawer" role="complementary" aria-label="Actividades del deal">
+  <div class="drawer-header">
+    <div class="drawer-header-info">
+      <div class="drawer-deal-title" id="drawer-deal-title">—</div>
+      <div class="drawer-deal-meta" id="drawer-deal-meta"></div>
+    </div>
+    <button class="drawer-close" id="drawer-close" aria-label="Cerrar panel">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-deal-stats" id="drawer-deal-stats"></div>
+  <div class="drawer-section-title">
+    <span>Actividades del contacto</span>
+    <span id="drawer-act-count" class="badge badge-neutral" style="font-size:10px">0</span>
+  </div>
+  <div class="drawer-body" id="drawer-act-list"></div>
+  <div class="drawer-footer">
+    <button class="btn btn-secondary btn-sm" id="drawer-btn-actividad">+ Actividad</button>
+    <button class="btn btn-primary btn-sm"   id="drawer-btn-deal">Editar deal</button>
+  </div>
+</div>
+
 <!-- TOASTS -->
 <div id="toasts" aria-live="polite" aria-atomic="false"></div>
 
