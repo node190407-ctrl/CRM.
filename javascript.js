@@ -20,7 +20,7 @@ const AUTH = { isAuth: false, role: null }; // 'admin' | 'ventas' /' co ventas'
 const ROLE_VIEWS = {
   admin:  ['dashboard','pipeline','contactos','actividades','configuracion'],
   ventas: ['dashboard','pipeline','contactos','actividades'],
-  venta: ['pipline,contactos','actividades'],
+  venta:  ['pipeline','contactos','actividades'],
 };
 
 const DEFAULT_PWD = { admin: 'admin', ventas: 'ventas' , venta: 'venta'};
@@ -32,8 +32,8 @@ function getPasswords() {
     return raw ? { ...DEFAULT_PWD, ...JSON.parse(raw) } : { ...DEFAULT_PWD };
   } catch { return { ...DEFAULT_PWD }; }
 }
-function persistPasswords(admin, ventas) {
-  localStorage.setItem(AUTH_PASSWORDS_KEY, JSON.stringify({ admin, ventas, venta}));
+function persistPasswords(admin, ventas, venta ) {
+  localStorage.setItem(AUTH_PASSWORDS_KEY, JSON.stringify({ admin, ventas, venta }));
 }
 
 /* ── Sesión (sessionStorage: se limpia al cerrar la pestaña) ── */
@@ -88,7 +88,9 @@ setupSearch();
 setupQuickMenu();
 setupKeyboard();
 
-navigate('dashboard');
+// Navegar a la primera vista permitida del rol (venta no tiene dashboard)
+  const firstView = ROLE_VIEWS[AUTH.role]?.[0] || 'pipeline';
+  navigate(firstView);
 }
 
 /* ── Logout ── */
@@ -109,17 +111,31 @@ function logout() {
 
 /* ── Aplicar restricciones de rol a la UI ── */
 function applyRole() {
-  const isAdmin = AUTH.role === 'admin';
-  const badge   = document.getElementById('role-badge');
+  const role  = AUTH.role;
+  const badge = document.getElementById('role-badge');
+
+  // Metadatos de cada rol
+  const ROLE_META = {
+    admin:  { icon: '👑', label: 'Admin',       cls: 'role-admin',  nombre: S.config.usuario },
+    ventas: { icon: '📈', label: 'Dir. Ventas', cls: 'role-ventas', nombre: 'Director Ventas' },
+    venta:  { icon: '🎯', label: 'Venta NODE',  cls: 'role-venta',  nombre: 'Venta NODE' },
+  };
+  const meta = ROLE_META[role] || ROLE_META.ventas;
+
+  // Badge del sidebar
   if (badge) {
-    badge.textContent = isAdmin ? '👑 Admin' : '📈 Ventas';
-    badge.className   = 'role-badge ' + (isAdmin ? 'role-admin' : 'role-ventas');
+    badge.textContent = meta.icon + ' ' + meta.label;
+    badge.className   = 'role-badge ' + meta.cls;
   }
+
+  // Ocultar vistas no permitidas en el nav
   document.querySelectorAll('.nav-item[data-view]').forEach(btn => {
     btn.classList.toggle('hidden', !canAccess(btn.dataset.view));
   });
-  document.getElementById('sidebar-user-name').textContent = S.config.usuario;
-  document.getElementById('sidebar-avatar').textContent    = initials(S.config.usuario);
+
+  // Nombre y avatar del sidebar
+  document.getElementById('sidebar-user-name').textContent = meta.nombre;
+  document.getElementById('sidebar-avatar').textContent    = initials(meta.nombre);
 }
 
 /* ── Guardar contraseñas (solo admin) ── */
@@ -376,6 +392,8 @@ function navigate(view) {
   S.charts = {};
   S.sortables.forEach(s => s?.destroy?.());
   S.sortables = [];
+  // Reset drill-down al salir del dashboard
+  if (view !== 'dashboard') CHART_STATE.expandedFase = null;
   S.view = view;
 
   // Nav highlight
@@ -495,52 +513,226 @@ function miniDealHTML(d) {
   </div>`;
 }
 
+/* ── Estado del drill-down de gráficas ── */
+const CHART_STATE = { expandedFase: null }; // null = vista de 3 fases agrupadas
+
 function buildCharts() {
-  // Bar chart — pipeline value by stage (active pipeline: not ganado/perdido)
+  buildBarChart();
+  buildDonutChart();
+}
+
+/* ── BAR CHART: vista agrupada por fase o desglosada por etapa ── */
+function buildBarChart() {
   const barEl = document.getElementById('chart-bar');
-  if (barEl) {
-    const active = ETAPAS.filter(e => e.id !== 'ganado' && e.id !== 'perdido');
-    const vals   = active.map(e => S.deals.filter(d => d.etapa === e.id).reduce((s,d) => s+(d.valor||0), 0));
+  if (!barEl) return;
+
+  // Destruir instancia previa
+  if (S.charts.bar) { S.charts.bar.destroy(); S.charts.bar = null; }
+
+  const expanded = CHART_STATE.expandedFase;
+
+  // ── Vista agrupada: 3 fases ───────────────────────────────────
+  if (!expanded) {
+    const faseData = FASES.map(f => {
+      const etapasIds = ETAPAS.filter(e => e.fase === f.id).map(e => e.id);
+      const valor     = S.deals.filter(d => etapasIds.includes(d.etapa)).reduce((s,d) => s+(d.valor||0), 0);
+      return { label: f.label, valor, color: f.color, bg: f.bg, tc: f.tc, id: f.id };
+    });
+
+    // Inyectar hint de click
+    const wrap = barEl.closest('.chart-card');
+    let hint = wrap.querySelector('.chart-hint');
+    if (!hint) {
+      hint = document.createElement('div');
+      hint.className = 'chart-hint';
+      hint.textContent = '👆 Haz clic en una barra para desglosar sus etapas';
+      wrap.querySelector('.chart-sub').after(hint);
+    }
+
     S.charts.bar = new Chart(barEl, {
       type: 'bar',
       data: {
-        labels: active.map(e => `${e.emoji} ${e.label}`),
-        datasets: [{ data:vals, backgroundColor:active.map(e=>e.bg), borderColor:active.map(e=>e.color), borderWidth:2, borderRadius:6 }]
+        labels: faseData.map(f => f.label),
+        datasets: [{
+          data:            faseData.map(f => f.valor),
+          backgroundColor: faseData.map(f => f.bg),
+          borderColor:     faseData.map(f => f.color),
+          borderWidth: 2,
+          borderRadius: 8,
+        }]
       },
       options: {
-        indexAxis:'y', responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: ctx => ' '+fmtMXN(ctx.raw) } } },
-        scales:{
-          x:{ grid:{ color:'#E4E8F0' }, ticks:{ callback:v=>fmtMXN(v), font:{family:'Space Grotesk, system-ui',size:10} } },
-          y:{ grid:{ display:false }, ticks:{ font:{family:'Space Grotesk, system-ui',size:10} } },
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        onClick: (_evt, elements) => {
+          if (!elements.length) return;
+          const idx = elements[0].index;
+          CHART_STATE.expandedFase = faseData[idx].id;
+          // Redibujar ambas gráficas en modo desglose
+          if (S.charts.bar)   { S.charts.bar.destroy();   S.charts.bar   = null; }
+          if (S.charts.donut) { S.charts.donut.destroy();  S.charts.donut = null; }
+          buildBarChart();
+          buildDonutChart();
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ' ' + fmtMXN(ctx.raw) } }
+        },
+        scales: {
+          x: { grid: { color: '#E4E8F0' }, ticks: { callback: v => fmtMXN(v), font: { family: 'Space Grotesk, system-ui', size: 10 } } },
+          y: { grid: { display: false },   ticks: { font: { family: 'Space Grotesk, system-ui', size: 12, weight: '600' } } }
         }
       }
     });
+    return;
   }
 
-  // Doughnut — deals count by stage
+  // ── Vista desglosada: etapas de la fase seleccionada ─────────
+  const fase     = FASES.find(f => f.id === expanded);
+  const etapas   = ETAPAS.filter(e => e.fase === expanded);
+  const vals     = etapas.map(e => S.deals.filter(d => d.etapa === e.id).reduce((s,d) => s+(d.valor||0), 0));
+
+  // Botón "volver"
+  const wrap = barEl.closest('.chart-card');
+  let backBtn = wrap.querySelector('.chart-back-btn');
+  if (!backBtn) {
+    backBtn = document.createElement('button');
+    backBtn.className = 'chart-back-btn';
+    backBtn.innerHTML = '← Volver a fases';
+    backBtn.onclick = () => {
+      CHART_STATE.expandedFase = null;
+      if (S.charts.bar)   { S.charts.bar.destroy();   S.charts.bar   = null; }
+      if (S.charts.donut) { S.charts.donut.destroy();  S.charts.donut = null; }
+      // Limpiar UI dinámica
+      wrap.querySelector('.chart-back-btn')?.remove();
+      wrap.querySelector('.chart-hint')?.remove();
+      wrap.querySelector('.chart-fase-label')?.remove();
+      const wrap2 = document.querySelector('#chart-donut')?.closest('.chart-card');
+      wrap2?.querySelector('.chart-back-btn')?.remove();
+      wrap2?.querySelector('.chart-fase-label')?.remove();
+      buildBarChart();
+      buildDonutChart();
+    };
+    wrap.querySelector('.chart-sub').after(backBtn);
+  }
+
+  // Label de fase activa
+  let faseLabel = wrap.querySelector('.chart-fase-label');
+  if (!faseLabel) {
+    faseLabel = document.createElement('div');
+    faseLabel.className = 'chart-fase-label';
+    backBtn.after(faseLabel);
+  }
+  faseLabel.innerHTML = `<span style="background:${fase.bg};color:${fase.tc};border:1px solid ${fase.color}33" class="fase-pill">F${fase.n} ${fase.label}</span> — etapas`;
+
+  // Quitar hint si quedó
+  wrap.querySelector('.chart-hint')?.remove();
+
+  S.charts.bar = new Chart(barEl, {
+    type: 'bar',
+    data: {
+      labels: etapas.map(e => `${e.emoji} ${e.label}`),
+      datasets: [{
+        data:            vals,
+        backgroundColor: etapas.map(e => e.bg),
+        borderColor:     etapas.map(e => e.color),
+        borderWidth: 2,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ' ' + fmtMXN(ctx.raw) } }
+      },
+      scales: {
+        x: { grid: { color: '#E4E8F0' }, ticks: { callback: v => fmtMXN(v), font: { family: 'Space Grotesk, system-ui', size: 10 } } },
+        y: { grid: { display: false },   ticks: { font: { family: 'Space Grotesk, system-ui', size: 10 } } }
+      }
+    }
+  });
+}
+
+/* ── DONUT CHART: por fase o por etapas de la fase seleccionada ── */
+function buildDonutChart() {
   const donutEl = document.getElementById('chart-donut');
-  if (donutEl) {
-    const counts = ETAPAS.map(e => S.deals.filter(d => d.etapa === e.id).length);
-    if (counts.every(v => v === 0)) {
+  if (!donutEl) return;
+  if (S.charts.donut) { S.charts.donut.destroy(); S.charts.donut = null; }
+
+  const expanded = CHART_STATE.expandedFase;
+  const wrap     = donutEl.closest('.chart-card');
+
+  // ── Vista agrupada: 3 fases ───────────────────────────────────
+  if (!expanded) {
+    // Limpiar elementos de desglose
+    wrap.querySelector('.chart-back-btn')?.remove();
+    wrap.querySelector('.chart-fase-label')?.remove();
+
+    const faseData = FASES.map(f => {
+      const etapasIds = ETAPAS.filter(e => e.fase === f.id).map(e => e.id);
+      const count     = S.deals.filter(d => etapasIds.includes(d.etapa)).length;
+      return { label: f.label, count, color: f.color, bg: f.bg };
+    });
+
+    if (faseData.every(f => f.count === 0)) {
       donutEl.closest('.chart-canvas').innerHTML = emptyState('📊','Sin datos','Agrega deals para ver la distribución.');
       return;
     }
+
     S.charts.donut = new Chart(donutEl, {
       type: 'doughnut',
       data: {
-        labels:   ETAPAS.map(e => e.label),
-        datasets: [{ data:counts, backgroundColor:ETAPAS.map(e=>e.bg), borderColor:ETAPAS.map(e=>e.color), borderWidth:2 }]
+        labels:   faseData.map(f => f.label),
+        datasets: [{ data: faseData.map(f => f.count), backgroundColor: faseData.map(f => f.bg), borderColor: faseData.map(f => f.color), borderWidth: 2 }]
       },
-      options:{
-        responsive:true, maintainAspectRatio:false, cutout:'68%',
-        plugins:{
-          legend:{ position:'right', labels:{ font:{family:'Space Grotesk, system-ui',size:11}, boxWidth:12, padding:10 } },
-          tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${ctx.raw} deal${ctx.raw!==1?'s':''}` } }
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '68%',
+        plugins: {
+          legend: { position: 'right', labels: { font: { family: 'Space Grotesk, system-ui', size: 12, weight: '600' }, boxWidth: 14, padding: 12 } },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} deal${ctx.raw !== 1 ? 's' : ''}` } }
         }
       }
     });
+    return;
   }
+
+  // ── Vista desglosada: etapas de la fase ──────────────────────
+  const fase   = FASES.find(f => f.id === expanded);
+  const etapas = ETAPAS.filter(e => e.fase === expanded);
+  const counts = etapas.map(e => S.deals.filter(d => d.etapa === e.id).length);
+
+  // Label de fase activa en el donut
+  let faseLabel = wrap.querySelector('.chart-fase-label');
+  if (!faseLabel) {
+    faseLabel = document.createElement('div');
+    faseLabel.className = 'chart-fase-label';
+    wrap.querySelector('.chart-sub').after(faseLabel);
+  }
+  faseLabel.innerHTML = `<span style="background:${fase.bg};color:${fase.tc};border:1px solid ${fase.color}33" class="fase-pill">F${fase.n} ${fase.label}</span>`;
+
+  if (counts.every(v => v === 0)) {
+    donutEl.closest('.chart-canvas').innerHTML = emptyState('📊','Sin deals','Esta fase no tiene deals aún.');
+    return;
+  }
+
+  S.charts.donut = new Chart(donutEl, {
+    type: 'doughnut',
+    data: {
+      labels:   etapas.map(e => `${e.emoji} ${e.label}`),
+      datasets: [{ data: counts, backgroundColor: etapas.map(e => e.bg), borderColor: etapas.map(e => e.color), borderWidth: 2 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '68%',
+      plugins: {
+        legend: { position: 'right', labels: { font: { family: 'Space Grotesk, system-ui', size: 11 }, boxWidth: 12, padding: 8 } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} deal${ctx.raw !== 1 ? 's' : ''}` } }
+      }
+    }
+  });
 }
 
 /* ── 8. PIPELINE KANBAN ─────────────────────────────────────── */
@@ -1398,32 +1590,27 @@ function init() {
   setupLoginScreen();
 
   const hasData = loadState();
+  if (!hasData) seedData();
 
-  if (!hasData) {
-    seedData();
-  }
-  navigate('dashboard');
-  
-
-  // Restaurar sesión
+  // Restaurar sesión activa (recarga de pestaña)
   if (restoreSession()) {
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
 
     applyRole();
-
     wireUpButtons();
     setupSearch();
     setupQuickMenu();
     setupKeyboard();
 
-    navigate('dashboard');
+    // Navegar a primera vista permitida del rol restaurado
+    const firstView = ROLE_VIEWS[AUTH.role]?.[0] || 'pipeline';
+    navigate(firstView);
 
   } else {
-
+    // Sin sesión → mostrar login
     document.getElementById('login-screen').classList.remove('hidden');
     document.getElementById('app').classList.add('hidden');
-
   }
 }
 
