@@ -868,13 +868,20 @@ function dealCardHTML(d) {
     </div>`;
   }
 
+  // Chip de actividades para dar contexto visual
+  const actCount = d.contactoId ? actsByContact(d.contactoId).length : 0;
+
   return `<div class="deal-card${tieneTracker ? ' deal-onboarding' : ''}"
-    data-id="${d.id}" ondblclick="openDealModal('${d.id}')">
+    data-id="${d.id}"
+    onclick="openDealDrawer('${d.id}')"
+    ondblclick="event.stopPropagation();openDealModal('${d.id}')"
+    title="Clic: ver actividades  ·  Doble clic: editar deal">
     <div class="deal-title">${escapeHTML(d.titulo)}</div>
     ${c ? `<div class="deal-contact-chip">
       <div class="mini-avatar">${initials(c.nombre)}</div>${escapeHTML(c.nombre)}
     </div>` : ''}
     <div class="deal-value">${fmtMXN(d.valor)}</div>
+    ${actCount > 0 ? `<div class="deal-act-count">📋 <span>${actCount}</span> actividad${actCount !== 1 ? 'es' : ''}</div>` : ''}
     ${trackerHTML}
     <div class="deal-footer">
       <div class="deal-next">${d.proximaAccion ? '→ '+escapeHTML(d.proximaAccion) : ''}</div>
@@ -1360,6 +1367,86 @@ function deleteActividad(id) {
   toast('Eliminada', '', 'warn');
 }
 
+/* ── DEAL DRAWER — Panel lateral de actividades ────────────── */
+
+function openDealDrawer(dealId) {
+  const d = S.deals.find(x => x.id === dealId);
+  if (!d) return;
+  const c = getContacto(d.contactoId);
+  const e = getEtapa(d.etapa);
+
+  // Header
+  document.getElementById('drawer-deal-title').textContent = d.titulo;
+  document.getElementById('drawer-deal-meta').innerHTML = `
+    <span class="badge" style="background:${e.bg};color:${e.tc};font-size:10px">${e.emoji} ${e.label}</span>
+    ${c ? `<span style="font-size:11px;color:var(--n-500)">· ${escapeHTML(c.nombre)}</span>` : ''}`;
+
+  // Stats row
+  const over = isOverdue(d.fechaLimite) && d.etapa !== 'ganado' && d.etapa !== 'perdido';
+  document.getElementById('drawer-deal-stats').innerHTML = `
+    <div class="drawer-stat">
+      <div class="drawer-stat-val">${fmtMXN(d.valor)}</div>
+      <div class="drawer-stat-lbl">Valor</div>
+    </div>
+    <div class="drawer-stat">
+      <div class="drawer-stat-val" style="${over ? 'color:var(--error)' : ''}">${d.fechaLimite ? fmtDate(d.fechaLimite) : '—'}</div>
+      <div class="drawer-stat-lbl">Fecha límite</div>
+    </div>
+    <div class="drawer-stat">
+      <div class="drawer-stat-val" style="font-size:12px;color:var(--n-600)">${d.proximaAccion ? escapeHTML(d.proximaAccion.slice(0,22))+(d.proximaAccion.length>22?'…':'') : '—'}</div>
+      <div class="drawer-stat-lbl">Próxima acción</div>
+    </div>`;
+
+  // Actividades del contacto
+  const acts = c ? actsByContact(c.id) : [];
+  document.getElementById('drawer-act-count').textContent = acts.length;
+
+  document.getElementById('drawer-act-list').innerHTML = acts.length === 0
+    ? `<div class="drawer-empty">
+        <div class="drawer-empty-icon">📋</div>
+        Sin actividades para este contacto.
+        <br><button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="drawerAddActividad()">+ Primera actividad</button>
+       </div>`
+    : acts.map(a => `
+        <div class="drawer-act-item">
+          <div class="drawer-act-icon" style="background:${ACT_BG[a.tipo]||'#f8f9fb'}">${ACT_ICONS[a.tipo]||'📌'}</div>
+          <div class="drawer-act-body">
+            <div class="drawer-act-tipo">${ACT_LABELS[a.tipo]||a.tipo}</div>
+            <div class="drawer-act-desc">${escapeHTML(a.descripcion)}</div>
+            <div class="drawer-act-time">${timeAgo(a.creadoEn)}</div>
+          </div>
+        </div>`).join('');
+
+  // Guardar referencias activas en el drawer
+  document.getElementById('deal-drawer').dataset.dealId     = dealId;
+  document.getElementById('deal-drawer').dataset.contactoId = d.contactoId || '';
+
+  document.getElementById('deal-drawer').classList.add('open');
+  document.getElementById('drawer-backdrop').classList.add('open');
+}
+
+function closeDealDrawer() {
+  document.getElementById('deal-drawer').classList.remove('open');
+  document.getElementById('drawer-backdrop').classList.remove('open');
+}
+
+function drawerAddActividad() {
+  const cid = document.getElementById('deal-drawer').dataset.contactoId;
+  closeDealDrawer();
+  openActividadModal(cid || null);
+}
+
+function setupDrawer() {
+  document.getElementById('drawer-close').addEventListener('click', closeDealDrawer);
+  document.getElementById('drawer-backdrop').addEventListener('click', closeDealDrawer);
+  document.getElementById('drawer-btn-actividad').addEventListener('click', drawerAddActividad);
+  document.getElementById('drawer-btn-deal').addEventListener('click', () => {
+    const did = document.getElementById('deal-drawer').dataset.dealId;
+    closeDealDrawer();
+    openDealModal(did);
+  });
+}
+
 /* ── 16. MODAL — DETALLE CONTACTO ─────────────────────────── */
 
 function openDetalleModal(cid) {
@@ -1548,7 +1635,7 @@ function setupKeyboard() {
 
     // Esc — cerrar todo
     if (e.key === 'Escape') {
-      closeAllModals(); closeQuickMenu();
+      closeAllModals(); closeQuickMenu(); closeDealDrawer();
       document.getElementById('shortcuts-panel')?.classList.add('hidden');
       closeSearchDropdown();
       return;
@@ -1655,6 +1742,9 @@ function wireUpButtons() {
   document.getElementById('shortcuts-backdrop')?.addEventListener('click', () => {
     document.getElementById('shortcuts-panel')?.classList.add('hidden');
   });
+
+  // Deal drawer
+  setupDrawer();
 }
 
 /* ── 23. INIT ──────────────────────────────────────────────── */
