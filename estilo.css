@@ -633,20 +633,24 @@ select.input {
 /* Phases container */
 .pipeline-phases-container {
   display: flex;
+  flex-direction: column;    /* ← apila las 3 fases verticalmente */
   gap: var(--sp-4);
-  overflow-x: auto;
+  overflow-x: visible;
   overflow-y: visible;
   padding-bottom: var(--sp-6);
-  align-items: stretch;
-  scrollbar-width: thin;
-  scrollbar-color: var(--n-300) transparent;
 }
-.pipeline-phases-container::-webkit-scrollbar { height: 4px; }
-.pipeline-phases-container::-webkit-scrollbar-track { background: transparent; }
-.pipeline-phases-container::-webkit-scrollbar-thumb { background: var(--n-300); border-radius: 2px; }
 
 /* Fase group */
-.fase-group { display: flex; flex-direction: column; flex-shrink: 0; gap: 0; border-radius: var(--r-md); overflow: hidden; box-shadow: var(--sh-xs); border: 1px solid var(--n-200); }
+.fase-group {
+  display: flex;
+  flex-direction: column;
+  width: 100%;              /* ← ocupa todo el ancho */
+  gap: 0;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  box-shadow: var(--sh-xs);
+  border: 1px solid var(--n-200);
+}
 
 /* Fase header */
 .fase-header {
@@ -692,20 +696,18 @@ select.input {
 
 /* Fase cols */
 .fase-cols {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); /* ← wrap automático */
   gap: var(--sp-3);
   padding: var(--sp-3);
   background: var(--n-50);
   border-radius: 0 0 var(--r-md) var(--r-md);
-  flex: 1;
-  min-height: 320px;
-  align-items: flex-start;
+  align-items: start;
 }
 
 /* Kanban column */
 .kanban-col {
-  min-width: 220px;
-  max-width: 220px;
+  min-width: 0;             /* ← el grid controla el ancho */
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
@@ -1378,32 +1380,323 @@ select.input {
 .money { font-family: var(--font-mono); font-weight: 600; letter-spacing: -0.01em; }
 
 /* ── 28. RESPONSIVE ── */
+/* ════════════════════════════════════════════════
+   RESPONSIVE — Node CRM
+   Breakpoints: 1200 · 900 · 600 · 480
+   ════════════════════════════════════════════════ */
+
+/* ── Tablet grande ── */
 @media (max-width: 1200px) {
-  .stats-grid { grid-template-columns: repeat(2, 1fr); }
-  .dashboard-cols { grid-template-columns: 1fr; }
-  .dashboard-bottom { grid-template-columns: 1fr; }
+  .stats-grid        { grid-template-columns: repeat(2, 1fr); }
+  .dashboard-cols    { grid-template-columns: 1fr; }
+  .dashboard-bottom  { grid-template-columns: 1fr; }
 }
+
+/* ── Tablet ── */
 @media (max-width: 900px) {
   :root { --sidebar-w: 60px; }
   .nav-label, .logo-text, .nav-kbd, .user-info { display: none; }
-  .sidebar-logo { justify-content: center; padding: var(--sp-4); }
-  .sidebar-nav::before { display: none; }
-  .nav-item { justify-content: center; padding: 12px; }
-  .sidebar-user { justify-content: center; padding: var(--sp-3); }
-  .user-avatar { margin: 0; }
-  #topbar { padding: 0 var(--sp-4); gap: var(--sp-3); }
-  .search-input { width: 180px; }
-  .search-input:focus { width: 220px; }
-  #content { padding: var(--sp-4); }
-  .form-row { grid-template-columns: 1fr; }
-  .config-grid { grid-template-columns: 1fr; }
-  .modal-split { flex-direction: column; }
-  .shortcuts-cols { grid-template-columns: 1fr; }
+  .sidebar-logo         { justify-content: center; padding: var(--sp-4); }
+  .sidebar-nav::before  { display: none; }
+  .nav-item             { justify-content: center; padding: 12px; }
+  .sidebar-user         { justify-content: center; padding: var(--sp-3); }
+  .user-avatar          { margin: 0; }
+  #topbar               { padding: 0 var(--sp-4); gap: var(--sp-3); }
+  .search-input         { width: 180px; }
+  .search-input:focus   { width: 220px; }
+  #content              { padding: var(--sp-4); }
+  .form-row             { grid-template-columns: 1fr; }
+  .config-grid          { grid-template-columns: 1fr; }
+  .modal-split          { flex-direction: column; }
+  .shortcuts-cols       { grid-template-columns: 1fr; }
 }
+
+/* ── Mobile: 600px ── */
 @media (max-width: 600px) {
-  .stats-grid { grid-template-columns: 1fr 1fr; }
   .contacts-table thead th:nth-child(3),
-  .contacts-table td:nth-child(3) { display: none; }
+  .contacts-table td:nth-child(3)        { display: none; }
+}
+
+/* ══════════════════════════════════════════════════
+   MOBILE — 480px
+   Sidebar → Bottom Tab Bar (patrón iOS nativo)
+   ══════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+
+  /* ── Variables móvil ── */
+  :root {
+    --sidebar-w:  0px;
+    --bottomnav-h: 58px;
+  }
+
+  /* ── 1. LAYOUT BASE ── */
+  body { overflow: hidden; }
+
+  #app {
+    flex-direction: column;
+    height: 100dvh;         /* respeta barra de URL del browser móvil */
+  }
+
+  /* ── 2. SIDEBAR → BOTTOM NAV BAR ── */
+  #sidebar {
+    /* Sacar del flow normal → fixed al fondo */
+    position: fixed;
+    bottom: 0; left: 0; right: 0; top: auto;
+    width: 100%;
+    height: var(--bottomnav-h);
+    min-width: unset;
+    flex-direction: row;
+    align-items: stretch;
+
+    /* Estilo barra inferior */
+    border-right: none;
+    border-top: 1px solid var(--n-200);
+    background: rgba(255,255,255,0.96);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    z-index: 200;
+
+    /* Sin overflow vertical */
+    overflow: hidden;
+  }
+
+  /* Ocultar elementos que no pertenecen al bottom nav */
+  .sidebar-logo,
+  .sidebar-bottom,
+  .sidebar-divider   { display: none; }
+
+  /* Nav: fila horizontal */
+  .sidebar-nav {
+    flex-direction: row;
+    padding: 0;
+    gap: 0;
+    justify-content: space-around;
+    align-items: stretch;
+    overflow: visible;
+    width: 100%;
+  }
+  .sidebar-nav::before { display: none; }
+
+  /* Cada botón de nav */
+  .nav-item {
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 2px 4px;
+    border-radius: 0;
+    font-size: 9px;
+    min-width: 0;
+    height: 100%;
+  }
+
+  /* Mostrar etiqueta en bottom nav */
+  .nav-label {
+    display: block !important;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 1;
+    color: inherit;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 52px;
+    text-align: center;
+  }
+
+  /* Estado activo: línea superior en lugar de izquierda */
+  .nav-item.active {
+    border-left: none;
+    padding-left: 2px;
+    color: var(--indigo);
+    background: var(--indigo-50);
+    border-radius: 10px;
+    margin: 6px 4px;
+    height: auto;
+    padding: 6px 6px 5px;
+  }
+
+  /* ── 3. MAIN — full width + espacio para bottom nav ── */
+  #main {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    padding-bottom: 0;
+  }
+
+  /* ── 4. TOPBAR ── */
+  #topbar {
+    padding: 0 var(--sp-3);
+    gap: var(--sp-2);
+    height: 50px;
+    min-height: 50px;
+  }
+
+  /* Ocultar barra de búsqueda en topbar (ocupa demasiado en móvil) */
+  .search-wrap  { display: none; }
+  .topbar-right { gap: var(--sp-1); }
+  .page-title   { font-size: 15px; }
+  .page-sub     { display: none; }
+
+  /* ── 5. CONTENT ── */
+  #content {
+    padding: var(--sp-3);
+    /* Espacio libre por encima del bottom nav */
+    padding-bottom: calc(var(--bottomnav-h) + var(--sp-3));
+  }
+
+  /* ── 6. DASHBOARD ── */
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-3);
+  }
+  .stat-card    { padding: var(--sp-3); }
+  .stat-icon    { width: 32px; height: 32px; margin-bottom: var(--sp-1); }
+  .stat-value   { font-size: 22px; }
+  .stat-label   { font-size: 10px; }
+
+  .dashboard-cols,
+  .dashboard-bottom { grid-template-columns: 1fr; gap: var(--sp-2); }
+  .chart-canvas { height: 180px; }
+  .chart-card   { padding: var(--sp-3) var(--sp-3); }
+
+  /* ── 7. PIPELINE ── */
+  .pipeline-header { flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+  .pipeline-stats  { gap: var(--sp-3); flex-wrap: nowrap; }
+  .pipe-stat-val   { font-size: 15px; }
+  .pipe-stat-label { font-size: 9px; }
+  .pipe-stat-sep   { height: 22px; }
+
+  /* Una columna por etapa en mobile */
+  .fase-cols {
+    grid-template-columns: 1fr !important;
+    padding: var(--sp-2);
+    gap: var(--sp-2);
+  }
+
+  .kanban-col   { min-width: 0; width: 100%; }
+  .fase-header  { padding: 8px var(--sp-3); min-height: 46px; }
+  .fase-title   { font-size: 10px; }
+  .fase-desc    { display: none; }
+
+  /* Deal card más compacto */
+  .deal-card    { padding: var(--sp-2) var(--sp-3) 8px; }
+  .deal-title   { font-size: 12px; }
+  .deal-value   { font-size: 13px; }
+
+  /* ── 8. CONTACTOS ── */
+  .view-header   { flex-wrap: wrap; gap: var(--sp-2); }
+  .view-filters  { flex-wrap: wrap; gap: var(--sp-2); width: 100%; }
+
+  /* Ocultar columnas secundarias de la tabla */
+  .contacts-table thead th:nth-child(2),
+  .contacts-table td:nth-child(2),
+  .contacts-table thead th:nth-child(3),
+  .contacts-table td:nth-child(3),
+  .contacts-table thead th:nth-child(5),
+  .contacts-table td:nth-child(5) { display: none; }
+
+  .contact-avatar { width: 28px; height: 28px; font-size: 10px; }
+  .contact-name   { font-size: 13px; }
+  .contact-email  { font-size: 11px; }
+
+  /* ── 9. ACTIVIDADES ── */
+  .activity-feed    { max-width: 100%; }
+  .activity-filters { flex-wrap: wrap; gap: 4px; }
+  .filter-btn       { font-size: 11px; padding: 5px 10px; }
+  .act-contact      { font-size: 13px; }
+  .act-etapa-badge  { display: none; } /* muy estrecho en móvil */
+
+  /* ── 10. MODALES — Bottom Sheet ── */
+  #modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal {
+    max-width: 100%;
+    width: 100%;
+    max-height: 94dvh;
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    /* Drag handle visual */
+    padding-top: 6px;
+    animation: mobileSheetUp var(--t-slow) cubic-bezier(0.34,1.16,0.64,1);
+  }
+  .modal::before {
+    content: '';
+    display: block;
+    width: 36px; height: 4px;
+    background: var(--n-300);
+    border-radius: 2px;
+    margin: 0 auto 4px;
+    flex-shrink: 0;
+  }
+  .modal.modal-lg { max-width: 100%; }
+  .modal-header   { padding: var(--sp-3) var(--sp-4); }
+  .modal-body     { padding: var(--sp-3) var(--sp-4); }
+  .modal-footer   {
+    padding: var(--sp-2) var(--sp-4);
+    gap: var(--sp-2);
+    flex-wrap: wrap;
+    /* Espacio por encima del bottom nav si el modal está arriba */
+    padding-bottom: calc(var(--sp-2) + env(safe-area-inset-bottom, 0px));
+  }
+  .modal-footer .btn { flex: 1; justify-content: center; min-width: 80px; }
+  .modal-split  { flex-direction: column; }
+
+  /* Header del modal de detalle */
+  .detalle-header-left  { gap: var(--sp-2); }
+  .detalle-header-right { gap: var(--sp-1); }
+  .detalle-avatar       { width: 36px; height: 36px; font-size: 13px; }
+
+  /* ── 11. FORM ROW ── */
+  .form-row { grid-template-columns: 1fr; }
+  .input    { height: 46px; font-size: 16px; } /* 16px evita zoom en iOS */
+  select.input { font-size: 16px; }
+
+  /* ── 12. TOASTS — arriba en mobile ── */
+  #toasts {
+    top: calc(50px + var(--sp-2));
+    bottom: auto;
+    right: var(--sp-3);
+    left: var(--sp-3);
+  }
+  .toast { min-width: 0; max-width: 100%; width: 100%; }
+
+  /* ── 13. CONFIG ── */
+  .config-grid        { grid-template-columns: 1fr; }
+  .shortcuts-cols     { grid-template-columns: 1fr; }
+  .pwd-field-group    { grid-template-columns: 1fr; }
+
+  /* ── 14. LOGIN ── */
+  .login-card         { padding: 24px 20px; }
+  .login-roles        { grid-template-columns: 1fr; }
+}
+
+/* ── Animación bottom sheet ── */
+@keyframes mobileSheetUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+/* ── Safe area para notch / home indicator (iPhone X+) ── */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  @media (max-width: 480px) {
+    #sidebar {
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      height: calc(var(--bottomnav-h) + env(safe-area-inset-bottom, 0px));
+    }
+    #content {
+      padding-bottom: calc(
+        var(--bottomnav-h) +
+        env(safe-area-inset-bottom, 0px) +
+        var(--sp-3)
+      );
+    }
+  }
 }
 
 /* ── 29. LOGIN NODE ── */
