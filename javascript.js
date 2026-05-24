@@ -1012,8 +1012,8 @@ function contactRowHTML(c) {
       <button class="icon-btn" onclick="openContactoModal('${c.id}')" title="Editar">
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
       </button>
-      <button class="icon-btn danger" onclick="deleteContacto('${c.id}')" title="Eliminar">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+      <button class="icon-btn realizado" onclick="marcarRealizado('${c.id}')" title="Marcar como realizado">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
       </button>
     </div></td>
   </tr>`;
@@ -1254,6 +1254,29 @@ function deleteContacto(id) {
   if (S.view === 'contactos') contactos();
   else navigate(S.view);
   toast('Eliminado', c.nombre, 'warn');
+}
+
+function marcarRealizado(id) {
+  const c = S.contactos.find(x => x.id === id);
+  if (!c) return;
+  const now = Date.now();
+
+  // Registrar actividad automática de "Realizado"
+  S.actividades.push({
+    id:          'a' + uid(),
+    tipo:        'nota',
+    contactoId:  id,
+    descripcion: `✅ Gestión realizada con ${c.nombre}${c.empresa ? ' · ' + c.empresa : ''}.`,
+    creadoEn:    now,
+  });
+
+  // Actualizar timestamp del contacto
+  c.actualizadoEn = now;
+
+  saveState();
+  if (S.view === 'contactos') contactos();
+  else if (S.view === 'actividades') actividades();
+  toast('Realizado', c.nombre, 'success');
 }
 
 /* ── 14. MODAL — DEAL ──────────────────────────────────────── */
