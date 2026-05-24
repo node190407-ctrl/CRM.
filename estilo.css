@@ -1108,7 +1108,9 @@ select.input {
   transition: all var(--t-fast) var(--ease);
 }
 .icon-btn:hover { background: var(--n-100); color: var(--ink); }
-.icon-btn.danger:hover { background: rgba(255,59,48,0.10); color: var(--error); }
+.icon-btn.danger:hover   { background: rgba(255,59,48,0.10);  color: var(--error); }
+.icon-btn.realizado      { color: var(--teal); }
+.icon-btn.realizado:hover{ background: rgba(13,148,136,0.12); color: var(--teal-700); }
 
 /* ── 17. ACTIVIDADES FEED iOS ── */
 .activity-filters {
